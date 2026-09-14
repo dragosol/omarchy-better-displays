@@ -7,12 +7,12 @@ cd "$plugin_dir"
 
 jq -e '
   .schemaVersion == 1 and
-  .id == "io.github.dragosol.displays" and
-  .name == "Displays" and
+  .id == "io.github.dragosol.better-displays-pro" and
+  .name == "Better Displays Pro" and
   .version == "1.0.0" and
   .author == "dragosol" and
   .license == "MIT" and
-  .barWidget.displayName == "Displays" and
+  .barWidget.displayName == "Better Displays Pro" and
   (has("omarchy") | not)
 ' manifest.json >/dev/null
 
@@ -24,7 +24,7 @@ test -s THIRD_PARTY_NOTICES.md
 test -x scripts/verify-release
 
 rg -qi 'omarchy plugin add' README.md
-rg -qi 'omarchy plugin remove io.github.dragosol.displays' README.md
+rg -qi 'omarchy plugin remove io.github.dragosol.better-displays-pro' README.md
 for section in '## Install' '## Usage' '## Configure' '## Remove'; do
   rg -qF "$section" README.md || { echo "README is missing $section" >&2; exit 1; }
 done

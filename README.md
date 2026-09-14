@@ -1,7 +1,7 @@
-# Displays
+# Better Displays Pro
 
-Displays is an Omarchy shell bar plugin that puts every display setting on one
-wide panel. Nothing is hidden in collapsible sections: turn screens on and
+Better Displays Pro is an Omarchy shell bar plugin for monitors and displays.
+It puts every display setting on one wide panel. Nothing is hidden in collapsible sections: turn screens on and
 off, arrange them, choose resolution, refresh rate, scale and rotation, assign
 workspaces and manage profiles, each one click away. The panel is sized to
 fit on a 1280×720 screen.
@@ -12,19 +12,22 @@ mode list is stale or incomplete, which is common behind USB-C docks and
 DP-to-HDMI adapters. When a better mode exists, the panel says why and offers
 it as a single button.
 
-![Displays panel](preview.png)
+![Better Displays Pro panel](preview.png)
+
+It is not related to the separate
+[Better Displays](https://github.com/nightdevil00/better.displays) plugin.
 
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/dragosol/omarchy-displays.git --enable
+omarchy plugin add https://github.com/dragosol/omarchy-better-displays.git --enable
 ```
 
 Omarchy installs third-party plugins disabled unless `--enable` is provided.
 Review the repository before enabling it: shell plugins run unsandboxed with
 your user permissions.
 
-Displays is a replacement for Omarchy's built-in **Display** bar widget
+Better Displays Pro is a replacement for Omarchy's built-in **Display** bar widget
 (`omarchy.monitor`) and answers the same `omarchy.monitor` shell IPC commands,
 so keyboard shortcuts and scripts that open the display panel keep working.
 Run only one of them. If the built-in widget is still in your bar, turn it off:
@@ -190,7 +193,7 @@ you keep a change. A few things are worth knowing:
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.dragosol.displays
+omarchy plugin remove io.github.dragosol.better-displays-pro
 rm -f ~/.local/state/omarchy/toggles/hypr/displays-remembered.lua
 omarchy plugin enable omarchy.monitor
 hyprctl reload
@@ -239,7 +242,7 @@ as plain text. See [SECURITY.md](SECURITY.md) and
 
 ## License and attribution
 
-MIT License. Displays is derived from
+MIT License. Better Displays Pro is derived from
 [Monitor Studio](https://github.com/vuhungthang/omarchy-monitor-studio) by
 vuhungthang, which is itself derived from the `omarchy.monitor` plugin in
 [Basecamp's Omarchy](https://github.com/basecamp/omarchy). The upstream

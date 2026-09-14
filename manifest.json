@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.dragosol.displays",
-  "name": "Displays",
+  "id": "io.github.dragosol.better-displays-pro",
+  "name": "Better Displays Pro",
   "version": "1.0.0",
   "author": "dragosol",
   "license": "MIT",
-  "description": "Every display setting on one wide panel: arrangement, native-mode detection from EDID, refresh rate, scale, rotation, workspaces and profiles, with a safe 15-second preview",
+  "description": "Multi-monitor settings on one wide panel: native resolution and refresh rate read from each monitor's EDID, scale, rotation, arrangement, mirroring, workspaces, and layouts remembered automatically across hotplug and Hyprland reloads.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Displays",
-    "description": "One-click display control: arrange screens, pick native resolution and refresh rate (read from each monitor's EDID), scale, rotation, workspaces and profiles, all on one panel that fits a 1280×720 screen",
+    "displayName": "Better Displays Pro",
+    "description": "Monitor and display settings from the bar: resolution, refresh rate (EDID-accurate), scale, rotation, arrange and mirror screens, assign workspaces. One wide panel that fits 1280×720; kept layouts come back on their own.",
     "category": "System",
     "allowMultiple": false
   }

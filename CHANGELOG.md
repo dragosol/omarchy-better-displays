@@ -1,10 +1,10 @@
 # Changelog
 
-All notable user-visible changes to Displays will be documented here.
+All notable user-visible changes to Better Displays Pro will be documented here.
 
 ## [1.0.0] - 2026-09-14
 
-First release of Displays (`io.github.dragosol.displays`), forked from Monitor
+First release of Better Displays Pro (`io.github.dragosol.better-displays-pro`), forked from Monitor
 Studio (commit `0fe80be`).
 
 ### Added

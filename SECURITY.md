@@ -2,7 +2,7 @@
 
 ## Scope
 
-Displays is an unsandboxed Omarchy shell plugin. When enabled, it runs
+Better Displays Pro is an unsandboxed Omarchy shell plugin. When enabled, it runs
 with the current user's permissions and can execute local commands and write
 user-owned state. Review the source and dependencies before installation.
 

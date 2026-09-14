@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Displays is a derivative work of two MIT-licensed projects:
+Better Displays Pro is a derivative work of two MIT-licensed projects:
 
 - **Monitor Studio** by `vuhungthang`
   (<https://github.com/vuhungthang/omarchy-monitor-studio>, commit `0fe80be`).
@@ -14,7 +14,7 @@ Displays is a derivative work of two MIT-licensed projects:
 
 The upstream MIT copyright and permission notice is retained in `LICENSE`.
 
-Changes made in Displays include the single wide panel layout without
+Changes made in Better Displays Pro include the single wide panel layout without
 collapsible sections, EDID modeline decoding with native-mode and
 connection-limit insight, applying and restoring EDID-only modes, refresh-drift
 canonicalisation, density-based scale suggestions, and real mode labels on the
