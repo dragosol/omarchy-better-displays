@@ -16,7 +16,7 @@ bash -n apply-layout.sh monitor-state-lib.sh monitor-snapshot-lib.sh profile-sto
   state.sh \
   tests/apply-layout.test.sh tests/monitor-state.test.sh tests/monitor-snapshot.test.sh \
   tests/profile-store.test.sh tests/profile-management.test.sh tests/release-package.test.sh \
-  tests/auto-restore.test.sh tests/edid-modes.test.sh
+  tests/auto-restore.test.sh tests/edid-modes.test.sh tests/hyprland-rules.test.sh
 
 bash tests/auto-restore.test.sh
 node tests/studio-model.test.js
@@ -31,6 +31,7 @@ node tests/topology-model.test.js
 node tests/mode-insight.test.js
 node tests/memory-planner.test.js
 bash tests/edid-modes.test.sh
+bash tests/hyprland-rules.test.sh
 node tests/display-events.test.js
 node tests/profile-matching.test.js
 node tests/untrusted-display-text.test.js

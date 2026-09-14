@@ -4,7 +4,8 @@ All notable user-visible changes to Displays will be documented here.
 
 ## [1.0.0] - 2026-09-14
 
-First release of Displays, forked from Monitor Studio (commit `0fe80be`).
+First release of Displays (`io.github.dragosol.displays`), forked from Monitor
+Studio (commit `0fe80be`).
 
 ### Added
 
@@ -30,6 +31,11 @@ First release of Displays, forked from Monitor Studio (commit `0fe80be`).
 - The remembered layout also comes back after a Hyprland config reload (saving
   a file in `~/.config/hypr`, changing the Omarchy theme) and after the shell
   restarts, re-checking until Hyprland's reloaded monitor rules have settled.
+- Kept layouts are written as Hyprland rules to
+  `~/.local/state/omarchy/toggles/hypr/displays-remembered.lua`, so events
+  that re-apply config monitor rules (switching a workspace between dwindle
+  and scrolling, config reloads) keep the layout instead of blanking the
+  displays twice.
 
 ### Changed
 

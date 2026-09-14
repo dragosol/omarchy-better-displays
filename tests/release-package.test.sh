@@ -7,12 +7,13 @@ cd "$plugin_dir"
 
 jq -e '
   .schemaVersion == 1 and
-  .id == "dragos.displays" and
+  .id == "io.github.dragosol.displays" and
   .name == "Displays" and
   .version == "1.0.0" and
-  .author == "dragos" and
+  .author == "dragosol" and
+  .license == "MIT" and
   .barWidget.displayName == "Displays" and
-  .omarchy.clonedFrom == "omarchy.monitor"
+  (has("omarchy") | not)
 ' manifest.json >/dev/null
 
 test -s README.md
@@ -23,7 +24,10 @@ test -s THIRD_PARTY_NOTICES.md
 test -x scripts/verify-release
 
 rg -qi 'omarchy plugin add' README.md
-rg -qi 'omarchy plugin remove' README.md
+rg -qi 'omarchy plugin remove io.github.dragosol.displays' README.md
+for section in '## Install' '## Usage' '## Configure' '## Remove'; do
+  rg -qF "$section" README.md || { echo "README is missing $section" >&2; exit 1; }
+done
 rg -qi 'unsandboxed' README.md
 rg -q '\.local/state/omarchy/displays/layout\.json' README.md
 rg -q 'Copyright \(c\) David Heinemeier Hansson' LICENSE

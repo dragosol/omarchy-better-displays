@@ -12,7 +12,37 @@ mode list is stale or incomplete, which is common behind USB-C docks and
 DP-to-HDMI adapters. When a better mode exists, the panel says why and offers
 it as a single button.
 
-## Layout
+![Displays panel](preview.png)
+
+## Install
+
+```bash
+omarchy plugin add https://github.com/dragosol/omarchy-displays.git --enable
+```
+
+Omarchy installs third-party plugins disabled unless `--enable` is provided.
+Review the repository before enabling it: shell plugins run unsandboxed with
+your user permissions.
+
+Displays is a replacement for Omarchy's built-in **Display** bar widget
+(`omarchy.monitor`) and answers the same `omarchy.monitor` shell IPC commands,
+so keyboard shortcuts and scripts that open the display panel keep working.
+Run only one of them. If the built-in widget is still in your bar, turn it off:
+
+```bash
+omarchy plugin disable omarchy.monitor
+```
+
+## Usage
+
+1. Click the display icon in the bar (or run `omarchy shell omarchy.monitor toggle`).
+2. Click a display card on the left to select it; its settings appear on the
+   right. The switch on each card turns that display on or off.
+3. Pick a layout preset, drag screens in the arrangement, choose resolution,
+   refresh rate, scale and rotation, or assign workspaces.
+4. Keep the change when asked (see below). From then on it is remembered.
+
+### Panel layout
 
 | Left: your displays | Centre: arrangement | Right: the selected display |
 | --- | --- | --- |
@@ -28,7 +58,7 @@ Keyboard: `j`/`k` walk the controls in reading order, `h`/`l` move within a
 row, `Enter` activates, and in the arrangement `Enter` picks up a screen so the
 arrow keys can move it.
 
-## Native modes and connection limits
+### Native modes and connection limits
 
 For each display the panel compares three sources:
 
@@ -60,22 +90,7 @@ A live custom modeline reports a slightly drifted refresh rate (for example
 so later scale, rotation and position changes, saved profiles and automatic
 restores all refer to the same mode.
 
-## Install
-
-```bash
-omarchy plugin add https://github.com/dragosol/omarchy-displays.git --enable
-```
-
-Omarchy installs third-party plugins disabled unless `--enable` is provided.
-Review the repository before enabling it: shell plugins run unsandboxed with
-your user permissions.
-
-Because this plugin declares `omarchy.clonedFrom: "omarchy.monitor"`, enabling
-it replaces the built-in monitor widget. Removing it restores the built-in
-widget and bar placement. Enable only one monitor-panel replacement at a time;
-they share the `omarchy.monitor` IPC target.
-
-## Safe changes
+### Safe changes
 
 1. Change anything: a preset, a switch, a mode button or a dragged screen.
 2. Settings and presets preview immediately. Arrangement and workspace edits
@@ -98,7 +113,7 @@ To add a keyboard escape hatch, put this in your own Hyprland configuration
 bindd = SUPER SHIFT, BackSpace, Emergency display revert, exec, omarchy shell omarchy.monitor revert
 ```
 
-## Remembering your displays
+### Remembering your displays
 
 Every layout you keep is remembered, and plugging displays in puts them back
 the way you last set them, with nothing to confirm:
@@ -142,14 +157,49 @@ The plugin never edits `~/.config/hypr/monitors.lua`. That file remains the
 fallback: to discard saved profiles, delete `profiles.json` and run
 `hyprctl reload`.
 
+## Configure
+
+There is no configuration file; everything is set from the panel and saved when
+you keep a change. A few things are worth knowing:
+
+- **Saved layouts** live in `~/.local/state/omarchy/displays/profiles.json`.
+  Rename, duplicate, select or delete them in the Profiles list. Deleting the
+  file forgets every remembered layout.
+- **Measure from** picks the anchor display that saved positions are measured
+  from, so layouts stay put when another display is added or removed.
+- **Your Hyprland `monitors.lua` is never edited.** It stays the fallback for
+  displays the plugin has never seen and for when the plugin is removed.
+- **Kept layouts survive Hyprland reloads.** Hyprland re-applies its monitor
+  rules on a config reload and on some runtime changes, such as switching a
+  workspace between dwindle and scrolling. So each kept layout is also written
+  as plain Hyprland rules to
+  `~/.local/state/omarchy/toggles/hypr/displays-remembered.lua`, which Omarchy
+  loads after `monitors.lua`. Displays are matched by monitor description (make,
+  model and serial), or by connector name when a description contains unusual
+  characters. The file only ever contains `hl.monitor` and `hl.workspace_rule`
+  calls built from validated names and numbers. Delete it to fall back to
+  `monitors.lua`.
+- **Emergency revert:** if a preview ever leaves you without a usable screen,
+  run `omarchy shell omarchy.monitor revert`, or bind it yourself in your
+  Hyprland configuration:
+
+  ```text
+  bindd = SUPER SHIFT, BackSpace, Emergency display revert, exec, omarchy shell omarchy.monitor revert
+  ```
+
 ## Remove
 
 ```bash
-omarchy plugin remove dragos.displays
+omarchy plugin remove io.github.dragosol.displays
+rm -f ~/.local/state/omarchy/toggles/hypr/displays-remembered.lua
+omarchy plugin enable omarchy.monitor
 hyprctl reload
 ```
 
-Removing the plugin does not delete saved profiles.
+Removing the plugin does not delete saved layouts. To forget them too, delete
+`~/.local/state/omarchy/displays/` and
+`~/.local/state/omarchy/toggles/hypr/displays-remembered.lua`. `hyprctl reload`
+returns every display to your `monitors.lua` settings.
 
 ## Dependencies
 
