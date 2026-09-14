@@ -233,9 +233,9 @@ for the manual hardware checklist.
 ## Security
 
 The plugin launches local commands and changes the live Hyprland display
-configuration. It downloads nothing and never uses `sudo` or `pkexec`. Monitor
-names and JSON payloads are validated before they become Hyprland Lua
-statements, and EDID modelines are generated from numeric fields only. EDID
+configuration. It downloads nothing and never asks for root or elevated
+privileges. Monitor names and JSON payloads are validated before they become
+Hyprland Lua statements, and EDID modelines are generated from numeric fields only. EDID
 make, model, description and serial text is treated as untrusted and rendered
 as plain text. See [SECURITY.md](SECURITY.md) and
 [docs/security-and-operations.md](docs/security-and-operations.md).
