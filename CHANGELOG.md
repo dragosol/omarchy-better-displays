@@ -44,6 +44,12 @@ Studio (commit `0fe80be`).
 
 ### Fixed
 
+- Hyprland no longer reloads its whole config every two seconds. The
+  remembered-layout rules file was rewritten on every restore check even when
+  nothing changed; Hyprland watches that file, so each rewrite reloaded the
+  config and triggered the next check. The file is now replaced only when its
+  rules change.
+
 - Settings changes on a display running a custom modeline no longer fail with
   "not advertised by this output": the drifted refresh the compositor reports
   maps back to the EDID timing.

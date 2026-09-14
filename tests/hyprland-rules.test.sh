@@ -32,6 +32,23 @@ grep -Fq 'hl.workspace_rule({ workspace = "5", monitor = "DP-1", default = false
 # Every generated statement is one of the two allowed shapes.
 grep -v '^--' "$rules" | grep -Ev '^hl\.(monitor|workspace_rule)\(\{ .* \}\)$' && { echo "unexpected rule line" >&2; exit 1; }
 
+# Re-syncing a settled layout must not touch the file: Hyprland watches it,
+# and every replacement reloads the whole config (a reload feedback loop).
+before=$(stat -c '%i %Y.%N' "$rules" 2>/dev/null || stat -c '%i %Y' "$rules")
+sleep 1
+RELOAD_RESTORE_SETTLE=0 bash "$script" restore-after-reload
+RELOAD_RESTORE_SETTLE=0 bash "$script" restore-after-reload
+bash "$script" preview seed3 "$proposal" "$proposal" '{"4":"DP-1","5":"DP-1"}'
+bash "$script" keep seed3
+test "$(stat -c '%i %Y.%N' "$rules" 2>/dev/null || stat -c '%i %Y' "$rules")" = "$before"
+test -z "$(find "${rules%/*}" -name '.displays-remembered.*')"
+
+# A real change still rewrites it.
+changed='[{"name":"eDP-1","width":2880,"height":1800,"refreshRate":59.99,"x":0,"y":0,"scale":2,"transform":0},{"name":"DP-1","width":1920,"height":1080,"refreshRate":60,"x":1440,"y":0,"scale":1.25,"transform":0}]'
+bash "$script" preview seed4 "$changed" "$proposal" '{"4":"DP-1","5":"DP-1"}'
+bash "$script" keep seed4
+grep -Fq 'scale = 1.25' "$rules"
+
 # Opting out leaves an existing file alone and writes nothing new.
 rm -f "$rules"
 DISPLAYS_HYPRLAND_RULES=0 bash "$script" preview seed2 "$proposal" "$proposal" '{}'

@@ -527,6 +527,13 @@ sync_hyprland_rules() {
     printf '%s\n' "$lines"
   } >"$stage"
   chmod 644 "$stage"
+  # Hyprland watches every file its config loads, so replacing this one reloads
+  # the whole config, which fires configreloaded, which runs a restore that
+  # syncs the rules again. Only replace the file when the rules changed.
+  if [[ -f $file ]] && cmp -s -- "$stage" "$file"; then
+    rm -f -- "$stage"
+    return 0
+  fi
   mv -f "$stage" "$file"
 }
 
