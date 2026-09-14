@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "dragos.displays",
+  "name": "Displays",
+  "version": "1.0.0",
+  "author": "dragos",
+  "description": "Every display setting on one wide panel: arrangement, native-mode detection from EDID, refresh rate, scale, rotation, workspaces and profiles, with a safe 15-second preview",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Displays",
+    "description": "One-click display control: arrange screens, pick native resolution and refresh rate (read from each monitor's EDID), scale, rotation, workspaces and profiles, all on one panel that fits a 1280×720 screen",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.monitor"
+  }
+}

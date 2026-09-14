@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -euo pipefail
+
+plugin_dir=$(cd "$(dirname "$0")/.." && pwd)
+cd "$plugin_dir"
+
+for command in bash jq node qmllint hyprctl omarchy; do
+  command -v "$command" >/dev/null || {
+    echo "missing required verification command: $command" >&2
+    exit 1
+  }
+done
+
+bash -n apply-layout.sh monitor-state-lib.sh monitor-snapshot-lib.sh profile-store-lib.sh edid-modes-lib.sh \
+  state.sh \
+  tests/apply-layout.test.sh tests/monitor-state.test.sh tests/monitor-snapshot.test.sh \
+  tests/profile-store.test.sh tests/profile-management.test.sh tests/release-package.test.sh \
+  tests/auto-restore.test.sh tests/edid-modes.test.sh
+
+bash tests/auto-restore.test.sh
+node tests/studio-model.test.js
+node tests/next-release.test.js
+bash tests/apply-layout.test.sh
+bash tests/monitor-state.test.sh
+bash tests/monitor-snapshot.test.sh
+bash tests/profile-store.test.sh
+bash tests/profile-management.test.sh
+node tests/layout-model.test.js
+node tests/topology-model.test.js
+node tests/mode-insight.test.js
+node tests/memory-planner.test.js
+bash tests/edid-modes.test.sh
+node tests/display-events.test.js
+node tests/profile-matching.test.js
+node tests/untrusted-display-text.test.js
+bash tests/release-package.test.sh
+
+omarchy plugin validate .
+qmllint -I "${OMARCHY_PATH:-/usr/share/omarchy}/shell" \
+  DisplayLayoutTile.qml FullScreenArrangement.qml IdentifyOverlay.qml \
+  DisplayConfirmationOverlay.qml Panel.qml
+
+if rg -n '(curl|wget)[[:space:]].*\|[[:space:]]*(ba)?sh|(^|[^[:alnum:]_])(sudo|pkexec)([^[:alnum:]_]|$)' \
+  --glob '*.sh' --glob '*.qml' .; then
+  echo "high-risk command pattern found" >&2
+  exit 1
+fi
+
+echo "release verification passed"
