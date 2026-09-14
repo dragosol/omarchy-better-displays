@@ -209,8 +209,13 @@ Provided by a normal Omarchy installation:
 - Hyprland's `hyprctl`
 - Omarchy display helpers for brightness, scaling and text size
 - Quickshell and the Omarchy shell QML modules
+- Node.js on `PATH`, used to match saved layouts to connected monitors.
+  Omarchy installs it globally with mise; if `node --version` fails, run
+  `mise use -g node@latest`. Without it, layouts are not restored automatically.
 - `edid-decode` (part of `v4l-utils`), for native-mode detection. Without it
   the panel falls back to Hyprland's advertised modes.
+
+No root access, network access, services or background daemons are used.
 
 ## Verify a checkout
 
