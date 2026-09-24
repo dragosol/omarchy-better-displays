@@ -899,7 +899,9 @@ Panel {
     root.layoutDragging = false
   }
 
-  function moveDisplay(name, canvasX, canvasY) {
+  // Every move lands edge-to-edge with the other displays (never a gap the
+  // cursor cannot cross, never an overlap); see Model.moveDisplayInCanvas.
+  function moveDisplay(name, canvasX, canvasY, alignPixels) {
     if (root.layoutConfirmationPending || root.layoutApplying) return
     var canvas = root.activeArrangementCanvas
     if (!canvas) return
@@ -907,14 +909,18 @@ Panel {
     root.layoutPreview = Model.moveDisplayInCanvas(
       root.layoutPreview, name, canvasX, canvasY, root.layoutScale,
       root.activeLayoutPadding, canvas.width, canvas.height,
-      Style.space(12))
+      alignPixels === undefined ? Style.space(12) : alignPixels)
     root.layoutError = ""
+    // A drop left of or above everything goes negative; refit brings it back.
+    Qt.callLater(root.refitDisplayLayout)
   }
 
   function nudgeSelectedDisplay(dx, dy) {
     if (root.selectedIndex < 0 || root.selectedIndex >= root.layoutPreview.length) return
     var item = root.layoutPreview[root.selectedIndex]
-    root.moveDisplay(item.name, item.x + dx * Style.space(4), item.y + dy * Style.space(4))
+    // No alignment pull for arrow keys, or a step off an aligned edge would
+    // snap straight back.
+    root.moveDisplay(item.name, item.x + dx * Style.space(4), item.y + dy * Style.space(4), 0)
   }
 
   function selectAdjacentDisplay(direction) {
@@ -946,6 +952,9 @@ Panel {
       root.layoutError = "Could not build valid display settings"
       return
     }
+    // Whatever built the proposal (drag, scale, resolution, rotation, enable,
+    // preset), displays reach Hyprland touching and never overlapping.
+    proposed = Model.snapTopologyPayload(proposed, previous)
     var anchor = Topology.validAnchor(proposed, root.anchorDisplayName)
     proposed = Topology.relativeToAnchor(proposed, anchor)
     root.anchorDisplayName = anchor

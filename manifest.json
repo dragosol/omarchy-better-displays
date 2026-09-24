@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.dragosol.better-displays-pro",
   "name": "Better Displays Pro",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "dragosol",
   "license": "MIT",
   "description": "Multi-monitor settings on one wide panel: native resolution and refresh rate read from each monitor's EDID, scale, rotation, arrangement, mirroring, workspaces, and layouts remembered automatically across hotplug and Hyprland reloads.",

@@ -449,8 +449,10 @@ function display(overrides) {
     fitted.scale, 10, 320, 160, 12
   )
   const dropped = moved.find(item => item.name === "DP-4")
+  const laptop = moved.find(item => item.name === "eDP-1")
 
-  assert.ok(dropped.logicalX > original.logicalX)
+  // Dropped away from the laptop: it slides down but stays against its edge.
+  assert.equal(dropped.logicalX, laptop.logicalX + laptop.logicalWidth)
   assert.ok(dropped.logicalY > original.logicalY)
 
   const leftOriginal = fitted.items.find(item => item.name === "eDP-1")
@@ -459,9 +461,130 @@ function display(overrides) {
     fitted.scale, 10, 320, 160, 12
   )
   const droppedLeft = movedLeft.find(item => item.name === "eDP-1")
+  const external = movedLeft.find(item => item.name === "DP-4")
 
-  assert.ok(droppedLeft.logicalX < leftOriginal.logicalX)
+  assert.equal(droppedLeft.logicalX + droppedLeft.logicalWidth, external.logicalX)
   assert.ok(droppedLeft.logicalY < leftOriginal.logicalY)
+}
+
+// ---- Edge snapping: never a gap, never an overlap ----
+function rectOf(item) {
+  return { name: item.name, x: item.logicalX, y: item.logicalY, w: item.logicalWidth, h: item.logicalHeight }
+}
+function assertConnected(items, label) {
+  const rects = items.map(rectOf)
+  for (let a = 0; a < rects.length; a++)
+    for (let b = a + 1; b < rects.length; b++)
+      assert.ok(!Model.rectsOverlap(rects[a], rects[b]), label + ": " + rects[a].name + " overlaps " + rects[b].name)
+  const reached = new Set([rects[0].name])
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const r of rects) {
+      if (reached.has(r.name)) continue
+      if (rects.some(o => reached.has(o.name) && Model.rectsTouch(r, o))) { reached.add(r.name); grew = true }
+    }
+  }
+  assert.equal(reached.size, rects.length, label + ": displays not all edge-connected")
+}
+function payloadItems(payload) {
+  return payload.filter(r => r.enabled !== false).map(r => ({
+    name: r.name, logicalX: r.x, logicalY: r.y,
+    logicalWidth: (r.transform % 2 ? r.height : r.width) / r.scale,
+    logicalHeight: (r.transform % 2 ? r.width : r.height) / r.scale
+  }))
+}
+
+{
+  // The live XPS + LG ULTRAGEAR+ layout: every drop, however far off, lands
+  // edge-to-edge. Before the fix a 20 px drag left a 117 px gap and a 30 px
+  // drag the other way overlapped the laptop (cursor drawn on both screens).
+  const fitted = Model.fitDisplayLayout([
+    display({ name: "eDP-1", width: 2880, height: 1800, scale: 2, x: 0, y: 765 }),
+    display({ name: "DP-1", width: 3840, height: 2160, scale: 1.5, x: 1440, y: 0 })
+  ], 900, 420, 24, 0.8)
+  for (const name of ["DP-1", "eDP-1"]) {
+    const start = fitted.items.find(item => item.name === name)
+    for (const [dx, dy] of [[0, 0], [5, 0], [20, 0], [40, 0], [-30, 0], [-80, 40], [60, 60], [0, -200], [-400, -300], [300, 250]]) {
+      const moved = Model.moveDisplayInCanvas(fitted.items, name, start.x + dx, start.y + dy,
+                                              fitted.scale, 24, 900, 420, 12)
+      assertConnected(moved, name + " by " + dx + "," + dy)
+    }
+  }
+}
+
+{
+  // Dropped on top of the other display: pushed to the nearest free edge,
+  // here just below it (1080 px away) rather than beside it (1620 px).
+  const items = [
+    { name: "a", logicalX: 0, logicalY: 0, logicalWidth: 1920, logicalHeight: 1080 },
+    { name: "b", logicalX: 1920, logicalY: 0, logicalWidth: 1920, logicalHeight: 1080 }
+  ]
+  const moved = Model.moveDisplayInCanvas(items, "b", 10 + 300 / 10, 10, 0.1, 10, 1000, 1000, 12)
+  assertConnected(moved, "dropped on top")
+  assert.equal(moved[1].logicalX, 300)
+  assert.equal(moved[1].logicalY, 1080)
+}
+
+{
+  // Three in a row; the middle one (the bridge) moves below the left one. The
+  // right one is reconnected instead of being left floating.
+  const items = [
+    { name: "left", logicalX: 0, logicalY: 0, logicalWidth: 1920, logicalHeight: 1080 },
+    { name: "middle", logicalX: 1920, logicalY: 0, logicalWidth: 1920, logicalHeight: 1080 },
+    { name: "right", logicalX: 3840, logicalY: 0, logicalWidth: 1920, logicalHeight: 1080 }
+  ]
+  const moved = Model.moveDisplayInCanvas(items, "middle", 10, 10 + 1080 / 10, 0.1, 10, 2000, 2000, 12)
+  assertConnected(moved, "bridge moved")
+  const middle = moved.find(item => item.name === "middle")
+  assert.equal(middle.logicalX, 0)
+  assert.equal(middle.logicalY, 1080)
+  assert.equal(moved.find(item => item.name === "left").logicalX, 0)
+}
+
+{
+  // Changing scale keeps neighbours attached: laptop 2x -> 1.6x grows it from
+  // 1440 to 1800 logical px wide, so the LG to its right shifts right by 360
+  // instead of being overlapped.
+  const previous = [
+    { name: "eDP-1", x: 0, y: 0, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 },
+    { name: "DP-1", x: 1440, y: 0, width: 3840, height: 2160, refreshRate: 144, scale: 1, transform: 0 }
+  ]
+  const proposed = [Object.assign({}, previous[0], { scale: 1.6 }), previous[1]]
+  const snapped = Model.snapTopologyPayload(proposed, previous)
+  assert.equal(snapped[0].x, 0)
+  assert.equal(snapped[1].x, 1800)
+  assertConnected(payloadItems(snapped), "laptop scale up")
+
+  // A display on the LEFT shrinking (LG 1x -> 1.5x) pulls the laptop in.
+  const leftPrevious = [
+    { name: "DP-1", x: 0, y: 0, width: 3840, height: 2160, refreshRate: 144, scale: 1, transform: 0 },
+    { name: "eDP-1", x: 3840, y: 0, width: 2880, height: 1800, refreshRate: 60, scale: 2, transform: 0 }
+  ]
+  const leftProposed = [Object.assign({}, leftPrevious[0], { scale: 1.5 }), leftPrevious[1]]
+  const leftSnapped = Model.snapTopologyPayload(leftProposed, leftPrevious)
+  assert.equal(leftSnapped[1].x, 2560)
+  assertConnected(payloadItems(leftSnapped), "left display scale down")
+
+  // Rotating a side monitor to portrait keeps it attached.
+  const rotated = Model.snapTopologyPayload(
+    [previous[0], Object.assign({}, previous[1], { transform: 1 })], previous)
+  assertConnected(payloadItems(rotated), "rotate")
+
+  // Disabled and mirrored records pass through untouched.
+  const withDisabled = Model.snapTopologyPayload(
+    previous.concat([{ name: "HDMI-A-1", enabled: false }, { name: "DP-2", x: 0, y: 0, width: 1920, height: 1080, scale: 1, mirrorOf: "eDP-1" }]),
+    previous)
+  assert.deepEqual(withDisabled[2], { name: "HDMI-A-1", enabled: false })
+  assert.equal(withDisabled[3].mirrorOf, "eDP-1")
+
+  // An already valid layout is returned unchanged.
+  assert.deepEqual(Model.snapTopologyPayload(previous, previous), previous)
+
+  // A gap in the incoming payload (e.g. from an old saved layout) is closed.
+  const gapped = Model.snapTopologyPayload(
+    [previous[0], Object.assign({}, previous[1], { x: 1600 })], previous)
+  assertConnected(payloadItems(gapped), "gap closed")
 }
 
 {

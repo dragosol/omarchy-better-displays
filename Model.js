@@ -436,6 +436,136 @@ function snapDisplayPosition(moving, others, threshold) {
   }
 }
 
+// ---- Edge snapping --------------------------------------------------------
+// Hyprland moves the cursor between outputs only across a shared edge. A gap
+// strands the cursor at the edge; an overlap draws the cursor (and anything
+// dragged) on both outputs. So the arrangement is kept as one connected group
+// of rectangles that touch along real edges and never overlap, like macOS.
+// Rects here are { name, x, y, w, h } in logical pixels.
+
+var EDGE_EPSILON = 0.5
+
+function sharedSpan(start, length, otherStart, otherLength) {
+  return Math.min(start + length, otherStart + otherLength) - Math.max(start, otherStart)
+}
+
+function rectsOverlap(a, b) {
+  return sharedSpan(a.x, a.w, b.x, b.w) > EDGE_EPSILON
+    && sharedSpan(a.y, a.h, b.y, b.h) > EDGE_EPSILON
+}
+
+function rectsTouch(a, b) {
+  var vertical = Math.abs(a.x + a.w - b.x) <= EDGE_EPSILON || Math.abs(b.x + b.w - a.x) <= EDGE_EPSILON
+  var horizontal = Math.abs(a.y + a.h - b.y) <= EDGE_EPSILON || Math.abs(b.y + b.h - a.y) <= EDGE_EPSILON
+  return (vertical && sharedSpan(a.y, a.h, b.y, b.h) > EDGE_EPSILON)
+    || (horizontal && sharedSpan(a.x, a.w, b.x, b.w) > EDGE_EPSILON)
+}
+
+function rectFits(rect, placed) {
+  var touches = false
+  for (var i = 0; i < placed.length; i++) {
+    if (rectsOverlap(rect, placed[i])) return false
+    if (!touches && rectsTouch(rect, placed[i])) touches = true
+  }
+  return touches
+}
+
+// Where along target's edge the moving rect may sit: the shared edge must be
+// long enough for the cursor to find it, and the spot nearest the desired one
+// wins, pulled onto a start or end alignment when within alignThreshold.
+function slideAlongEdge(desired, length, targetStart, targetLength, alignThreshold) {
+  var minShared = Math.min(100, Math.min(length, targetLength) / 4)
+  var low = targetStart - length + minShared
+  var high = targetStart + targetLength - minShared
+  var value = Math.max(low, Math.min(high, desired))
+  var aligned = [targetStart, targetStart + targetLength - length]
+  var best = value
+  var distance = Math.max(0, finiteNumber(alignThreshold, 0)) + 0.0001
+  for (var i = 0; i < aligned.length; i++) {
+    var d = Math.abs(desired - aligned[i])
+    if (d < distance && aligned[i] >= low - EDGE_EPSILON && aligned[i] <= high + EDGE_EPSILON) {
+      best = aligned[i]
+      distance = d
+    }
+  }
+  return best
+}
+
+// Put rect against the nearest free edge of any placed rect, as close to
+// (desiredX, desiredY) as possible. A drop that already touches and overlaps
+// nothing keeps its spot, apart from alignment.
+function attachRect(rect, desiredX, desiredY, placed, alignThreshold) {
+  if (!placed.length) return Object.assign({}, rect, { x: desiredX, y: desiredY })
+  var best = null
+  var bestDistance = Infinity
+  function consider(x, y) {
+    var candidate = Object.assign({}, rect, { x: x, y: y })
+    if (!rectFits(candidate, placed)) return
+    var distance = Math.hypot(x - desiredX, y - desiredY)
+    if (distance < bestDistance - 0.0001) {
+      best = candidate
+      bestDistance = distance
+    }
+  }
+  for (var i = 0; i < placed.length; i++) {
+    var t = placed[i]
+    var alongY = slideAlongEdge(desiredY, rect.h, t.y, t.h, alignThreshold)
+    var alongX = slideAlongEdge(desiredX, rect.w, t.x, t.w, alignThreshold)
+    consider(t.x + t.w, alongY)
+    consider(t.x - rect.w, alongY)
+    consider(alongX, t.y + t.h)
+    consider(alongX, t.y - rect.h)
+  }
+  if (best) return best
+  // Every edge near the drop is blocked: go beside the whole group instead.
+  var right = -Infinity
+  var top = 0
+  for (var j = 0; j < placed.length; j++) {
+    if (placed[j].x + placed[j].w > right) {
+      right = placed[j].x + placed[j].w
+      top = placed[j].y
+    }
+  }
+  return Object.assign({}, rect, { x: right, y: top })
+}
+
+// Make rects one connected, non-overlapping group. rects[0] never moves; the
+// rest keep their spot when they already fit against what is placed, and
+// otherwise attach at the nearest free edge. Order is priority.
+function connectRects(rects, alignThreshold) {
+  if (!Array.isArray(rects) || rects.length < 2) return (rects || []).slice()
+  var placed = [Object.assign({}, rects[0])]
+  var remaining = rects.slice(1)
+  while (remaining.length) {
+    var index = -1
+    for (var i = 0; i < remaining.length; i++) {
+      if (rectFits(remaining[i], placed)) { index = i; break }
+    }
+    if (index >= 0) {
+      placed.push(Object.assign({}, remaining[index]))
+    } else {
+      // Nothing fits as-is: move the one closest to the group the least.
+      var nearest = 0
+      var nearestGap = Infinity
+      for (var k = 0; k < remaining.length; k++) {
+        for (var p = 0; p < placed.length; p++) {
+          var r = remaining[k]
+          var o = placed[p]
+          var gap = Math.hypot(Math.max(0, o.x - (r.x + r.w), r.x - (o.x + o.w)),
+                               Math.max(0, o.y - (r.y + r.h), r.y - (o.y + o.h)))
+          if (gap < nearestGap) { nearestGap = gap; nearest = k }
+        }
+      }
+      index = nearest
+      placed.push(attachRect(remaining[index], remaining[index].x, remaining[index].y, placed, alignThreshold))
+    }
+    remaining.splice(index, 1)
+  }
+  var byName = {}
+  for (var n = 0; n < placed.length; n++) byName[placed[n].name] = placed[n]
+  return rects.map(function(rect) { return byName[rect.name] })
+}
+
 function moveDisplayInCanvas(items, name, canvasX, canvasY, scale, padding, canvasWidth, canvasHeight, snapPixels) {
   if (!Array.isArray(items)) return []
   var factor = Math.max(0.0001, finiteNumber(scale, 1))
@@ -443,20 +573,94 @@ function moveDisplayInCanvas(items, name, canvasX, canvasY, scale, padding, canv
   var moving = items.find(function(item) { return item && item.name === name })
   if (!moving) return items.slice()
 
-  var maxLogicalX = Math.max(0, (finiteNumber(canvasWidth, 1) - inset * 2) / factor - moving.logicalWidth)
-  var maxLogicalY = Math.max(0, (finiteNumber(canvasHeight, 1) - inset * 2) / factor - moving.logicalHeight)
-  var candidate = Object.assign({}, moving, {
-    logicalX: Math.max(0, Math.min(maxLogicalX, (finiteNumber(canvasX, inset) - inset) / factor)),
-    logicalY: Math.max(0, Math.min(maxLogicalY, (finiteNumber(canvasY, inset) - inset) / factor))
-  })
-  var snapped = snapDisplayPosition(candidate, items, finiteNumber(snapPixels, 0) / factor)
-  candidate.logicalX = Math.max(0, Math.min(maxLogicalX, snapped.x))
-  candidate.logicalY = Math.max(0, Math.min(maxLogicalY, snapped.y))
-  candidate.x = inset + candidate.logicalX * factor
-  candidate.y = inset + candidate.logicalY * factor
+  var toRect = function(item) {
+    return { name: item.name, x: finiteNumber(item.logicalX, 0), y: finiteNumber(item.logicalY, 0),
+             w: finiteNumber(item.logicalWidth, 0), h: finiteNumber(item.logicalHeight, 0) }
+  }
+  var others = items.filter(function(item) { return item && item.name !== name && !item.mirrorOf })
+  var desiredX = (finiteNumber(canvasX, inset) - inset) / factor
+  var desiredY = (finiteNumber(canvasY, inset) - inset) / factor
+  var threshold = finiteNumber(snapPixels, 0) / factor
+  var attached = attachRect(toRect(moving), desiredX, desiredY, others.map(toRect), threshold)
+  // The moved display may have been the bridge between others; reconnect them
+  // around its new spot without moving it.
+  var settled = connectRects([attached].concat(others.map(toRect)), threshold)
+  var byName = {}
+  for (var i = 0; i < settled.length; i++) byName[settled[i].name] = settled[i]
 
+  // Positions can go negative (dropped left of or above everything); the
+  // caller refits the canvas, which normalizes them back into view.
   return items.map(function(item) {
-    return item && item.name === name ? candidate : Object.assign({}, item)
+    var rect = item && byName[item.name]
+    if (!rect) return Object.assign({}, item)
+    return Object.assign({}, item, {
+      logicalX: rect.x, logicalY: rect.y,
+      x: inset + rect.x * factor, y: inset + rect.y * factor
+    })
+  })
+}
+
+function payloadRect(record) {
+  var rotated = cleanTransform(record.transform) % 2 === 1
+  var scale = Math.max(0.01, finiteNumber(record.scale, 1))
+  var width = finiteNumber(record.width, 0)
+  var height = finiteNumber(record.height, 0)
+  return { name: String(record.name), x: finiteNumber(record.x, 0), y: finiteNumber(record.y, 0),
+           w: (rotated ? height : width) / scale, h: (rotated ? width : height) / scale }
+}
+
+function arrangedRecord(record) {
+  return record && record.enabled !== false && !record.mirrorOf
+    && finiteNumber(record.width, 0) > 0 && finiteNumber(record.height, 0) > 0
+}
+
+// Keep a proposed full-topology payload edge-to-edge. When a display's logical
+// size changes (scale, resolution, rotation) the displays that sat to its
+// right or below it shift by the same amount, so neighbours stay attached the
+// way they were; anything still overlapping or detached is then reattached.
+// Displays whose size and position did not change anchor the result.
+function snapTopologyPayload(proposed, previous) {
+  if (!Array.isArray(proposed)) return proposed
+  var before = {}
+  for (var i = 0; Array.isArray(previous) && i < previous.length; i++) {
+    if (arrangedRecord(previous[i])) before[previous[i].name] = payloadRect(previous[i])
+  }
+  var records = proposed.filter(arrangedRecord)
+  if (records.length < 2) return proposed
+
+  var rects = records.map(payloadRect)
+  var shifted = rects.map(function(rect) { return Object.assign({}, rect) })
+  for (var d = 0; d < rects.length; d++) {
+    var old = before[rects[d].name]
+    if (!old || Math.abs(old.x - rects[d].x) > EDGE_EPSILON || Math.abs(old.y - rects[d].y) > EDGE_EPSILON) continue
+    var dw = rects[d].w - old.w
+    var dh = rects[d].h - old.h
+    if (Math.abs(dw) <= EDGE_EPSILON && Math.abs(dh) <= EDGE_EPSILON) continue
+    for (var o = 0; o < rects.length; o++) {
+      var other = before[rects[o].name]
+      if (o === d || !other) continue
+      if (Math.abs(other.x - rects[o].x) > EDGE_EPSILON || Math.abs(other.y - rects[o].y) > EDGE_EPSILON) continue
+      if (other.x >= old.x + old.w - EDGE_EPSILON) shifted[o].x += dw
+      if (other.y >= old.y + old.h - EDGE_EPSILON) shifted[o].y += dh
+    }
+  }
+
+  function unchanged(rect) {
+    var old = before[rect.name]
+    return old && Math.abs(old.x - rect.x) <= EDGE_EPSILON && Math.abs(old.y - rect.y) <= EDGE_EPSILON
+      && Math.abs(old.w - rect.w) <= EDGE_EPSILON && Math.abs(old.h - rect.h) <= EDGE_EPSILON
+  }
+  var order = shifted.map(function(rect, index) { return { rect: rect, stable: unchanged(rects[index]) } })
+  order.sort(function(a, b) { return (b.stable ? 1 : 0) - (a.stable ? 1 : 0) })
+  var settled = connectRects(order.map(function(entry) {
+    return Object.assign({}, entry.rect, { x: Math.round(entry.rect.x), y: Math.round(entry.rect.y) })
+  }), 0)
+  var byName = {}
+  for (var s = 0; s < settled.length; s++) byName[settled[s].name] = settled[s]
+  return proposed.map(function(record) {
+    var rect = record && arrangedRecord(record) && byName[record.name]
+    if (!rect) return record
+    return Object.assign({}, record, { x: Math.round(rect.x), y: Math.round(rect.y) })
   })
 }
 
@@ -977,6 +1181,10 @@ if (typeof module !== "undefined") {
     refitDisplayLayout: refitDisplayLayout,
     snapDisplayPosition: snapDisplayPosition,
     moveDisplayInCanvas: moveDisplayInCanvas,
+    rectsOverlap: rectsOverlap,
+    rectsTouch: rectsTouch,
+    connectRects: connectRects,
+    snapTopologyPayload: snapTopologyPayload,
     buildDisplayLayoutPayload: buildDisplayLayoutPayload,
     buildMonitorSettingPayload: buildMonitorSettingPayload,
     prepareDisplaySettingPreview: prepareDisplaySettingPreview,

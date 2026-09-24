@@ -2,6 +2,28 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.0.1] - 2026-09-24
+
+### Fixed
+
+- Displays now always snap to each other. Dropping a display more than a few
+  pixels from an edge used to leave it where it landed: a gap the cursor could
+  not cross, or an overlap that drew the cursor and dragged windows on both
+  screens. A dropped display now attaches to the nearest free edge of another
+  display (tops and bottoms still align when dropped close to them), and the
+  rest of the arrangement is reconnected if it was the display joining them.
+- Changing a display's scale, resolution or rotation keeps its neighbours
+  attached: displays to its right or below it move by the change in size,
+  instead of being overlapped or left behind a gap.
+- Every layout is checked for gaps and overlaps before it is applied,
+  whichever control produced it.
+- Arrow-key nudges slide a display along the edge it is attached to.
+
+### Changed
+
+- Hotplug detection is event-driven while the panel is closed (screen list,
+  Hyprland monitor events, a udev DRM watch) instead of a 5-second poll.
+
 ## [1.0.0] - 2026-09-14
 
 First release of Better Displays Pro (`io.github.dragosol.better-displays-pro`), forked from Monitor

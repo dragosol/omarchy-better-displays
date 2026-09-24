@@ -5,11 +5,15 @@ set -euo pipefail
 plugin_dir=$(cd "$(dirname "$0")/.." && pwd)
 cd "$plugin_dir"
 
-jq -e '
+# The manifest version is the newest CHANGELOG release.
+release_version=$(sed -n 's/^## \[\([0-9][0-9.]*\)\].*/\1/p' CHANGELOG.md | head -1)
+[[ -n $release_version ]] || { echo "CHANGELOG.md has no release heading" >&2; exit 1; }
+
+jq -e --arg version "$release_version" '
   .schemaVersion == 1 and
   .id == "io.github.dragosol.better-displays-pro" and
   .name == "Better Displays Pro" and
-  .version == "1.0.0" and
+  .version == $version and
   .author == "dragosol" and
   .license == "MIT" and
   .barWidget.displayName == "Better Displays Pro" and
