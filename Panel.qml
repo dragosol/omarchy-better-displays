@@ -1272,8 +1272,8 @@ Panel {
 
   // Quickshell screen-list changes are the event-driven fast path. The event
   // model waits for a 1-second quiet window (3-second maximum) before asking
-  // Hyprland for a stable snapshot. Polling below remains the recovery path
-  // when the host does not emit this signal.
+  // Hyprland for a stable snapshot. The udev DRM watch below covers hotplugs
+  // that never reach the screen list.
   Connections {
     target: Quickshell
     function onScreensChanged() { root.noteDisplayHardwareEvent() }
@@ -1287,10 +1287,37 @@ Panel {
   Connections {
     target: Hyprland
     function onRawEvent(event) {
-      if (!event || String(event.name || "") !== "configreloaded") return
+      var name = event ? String(event.name || "") : ""
+      if (name.indexOf("monitoradded") === 0 || name.indexOf("monitorremoved") === 0) {
+        root.noteDisplayHardwareEvent()
+        return
+      }
+      if (name !== "configreloaded") return
       root.reloadEventCount++
       configReloadRestoreTimer.restart()
     }
+  }
+
+  // Kernel DRM hotplug events cover what Quickshell.screens cannot see: a
+  // connector that comes up while Hyprland keeps it disabled, or an EDID swap.
+  // One idle udevadm per session (the IPC owner) replaces the old 5 s poll.
+  Process {
+    id: drmHotplugWatch
+    command: ["stdbuf", "-oL", "udevadm", "monitor", "--udev", "--subsystem-match=drm"]
+    running: root.ownsDisplayIpc
+    stdout: SplitParser {
+      onRead: function(line) {
+        if (/\schange\s.*\(drm\)/.test(line)) root.noteDisplayHardwareEvent()
+      }
+    }
+    onExited: if (root.ownsDisplayIpc) drmHotplugRespawn.restart()
+  }
+
+  Timer {
+    id: drmHotplugRespawn
+    interval: 5000
+    repeat: false
+    onTriggered: if (root.ownsDisplayIpc) drmHotplugWatch.running = true
   }
 
   Timer {
@@ -1342,12 +1369,12 @@ Panel {
     onTriggered: root.identifyActive = false
   }
 
-  // Only poll while the panel is open; the bar glyph tracks monitor count via
-  // Quickshell.screens, and open-time refresh + Component.onCompleted cover the
-  // rest. External brightness changes are reflected whenever the panel is open.
+  // Only poll while the panel is open (external brightness changes stay live
+  // there). With it closed, hotplug is event-driven: Quickshell.screens,
+  // Hyprland monitor events, configreloaded, and the udev DRM watch above.
   Timer {
     interval: 5000
-    running: root.ownsDisplayIpc || root.opened || root.layoutConfirmationPending
+    running: root.opened || root.layoutConfirmationPending
     repeat: true
     onTriggered: root.refresh()
   }
