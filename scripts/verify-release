@@ -34,6 +34,7 @@ bash tests/edid-modes.test.sh
 bash tests/hyprland-rules.test.sh
 node tests/display-events.test.js
 node tests/profile-matching.test.js
+node tests/confirmation-policy.test.js
 node tests/untrusted-display-text.test.js
 bash tests/release-package.test.sh
 

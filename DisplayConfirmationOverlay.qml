@@ -112,7 +112,7 @@ Item {
 
         Row {
           width: parent.width
-          visible: root.policyKind === "keep"
+          visible: root.policyKind === "keep" || root.policyKind === "keep-uncertain"
           spacing: Style.spacing.xs
           readonly property real cellWidth: (width - spacing) / 2
 
@@ -174,7 +174,7 @@ Item {
 
         Button {
           width: parent.width
-          visible: root.policyKind !== "keep"
+          visible: root.policyKind !== "keep" && root.policyKind !== "keep-uncertain"
           text: root.busy ? "Working…" : "Revert"
           focusable: true
           bordered: true
