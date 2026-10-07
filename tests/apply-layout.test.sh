@@ -487,4 +487,33 @@ grep -F '"code":"mode-unavailable"' "$test_root/unadvertised.err"
 grep -F 'eDP-1' "$test_root/unadvertised.err"
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
+# A monitor whose serial and EDID churn between sessions matches its saved
+# profile only weakly (same make, model, size, connector). Keeping a layout
+# then must update that profile in place and re-anchor its identity, not fork
+# a new "Current displays" profile on every churn.
+weak_monitors=$(jq -c 'map(. + {physicalWidth: 600, physicalHeight: 340})' <<<"$monitors_json")
+for connector in DP-1 eDP-1; do
+  mkdir -p "$test_root/empty-sysfs/card0-$connector"
+  printf 'connected\n' >"$test_root/empty-sysfs/card0-$connector/status"
+  printf 'edid-%s-a\n' "$connector" >"$test_root/empty-sysfs/card0-$connector/edid"
+done
+printf '%s' "$weak_monitors" >"$test_root/monitors.json"
+run_layout preview weak-baseline "$proposed" "$previous" '{}'
+run_layout keep weak-baseline
+weak_profiles_before=$(jq '.profiles | length' "$state_file")
+weak_active=$(jq -r .activeProfileId "$state_file")
+printf 'edid-DP-1-b\n' >"$test_root/empty-sysfs/card0-DP-1/edid"
+printf '%s' "$(jq -c 'map(if .name == "DP-1" then .serial = "SN1-CHURNED" else . end)' <<<"$weak_monitors")" \
+  >"$test_root/monitors.json"
+run_layout preview weak-churn "$previous" "$proposed" '{}'
+run_layout keep weak-churn
+test "$(jq '.profiles | length' "$state_file")" = "$weak_profiles_before"
+test "$(jq -r .activeProfileId "$state_file")" = "$weak_active"
+jq -e --arg id "$weak_active" '.profiles[] | select(.id == $id)
+  | .topology.monitors | map(select(.name == "DP-1"))[0].x == 1440' "$state_file" >/dev/null
+jq -e --arg id "$weak_active" '.profiles[] | select(.id == $id)
+  | any(.matchPolicy.identities[]; .serial == "SN1-CHURNED")' "$state_file" >/dev/null
+rm -rf "$test_root/empty-sysfs"/card0-*
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+
 echo "apply layout transaction tests passed"

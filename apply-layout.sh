@@ -405,7 +405,10 @@ persist_state() {
     profile_name=$(jq -r --arg id "$source_profile_id" \
       '.profiles[] | select(.id == $id) | .name + " (moved)"' <<<"$store")
   else
-    profile_id=$(jq -r 'select(.status == "exact") | .profileId' <<<"$status")
+    # A weak match is complete (every display maps 1:1 on the same connector)
+    # and was confirmed on screen, so it updates that profile and re-anchors
+    # its identities instead of forking a new one on every EDID/serial churn.
+    profile_id=$(jq -r 'select(.status == "exact" or .status == "weak") | .profileId' <<<"$status")
   fi
   if [[ -n $profile_id ]]; then
     store=$(jq -c --arg id "$profile_id" --argjson monitors "$payload" \
