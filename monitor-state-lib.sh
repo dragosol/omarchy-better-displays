@@ -5,7 +5,7 @@ preferred_resolution_for() {
   local sysfs_root=${MONITOR_SYSFS_ROOT:-/sys/class/drm}
   local decoder=${MONITOR_EDID_DECODER:-edid-decode}
   local cache_root=${MONITOR_RECOMMENDATION_CACHE:-${XDG_RUNTIME_DIR:-/tmp}/omarchy-displays-edid}
-  local connector output resolution edid_hash monitor_hash cache_file cached_hash cached_resolution stage
+  local connector output resolution edid_hash monitor_hash cache_file cached_hash cached_resolution stage preferred
 
   [[ -n $monitor_name ]] || return 0
   if [[ $decoder == */* ]]; then
@@ -36,6 +36,14 @@ preferred_resolution_for() {
 
     output=$(LC_ALL=C "$decoder" -s --skip-sha -n "$connector/edid" 2>/dev/null) || continue
     resolution=$(awk '/^Native Video Resolution:$/ { getline; print $1; exit }' <<<"$output")
+    # A DTD the firmware explicitly marks preferred outranks the summary's
+    # positional "Native Video Resolution" (see edid_preferred_dtds).
+    if command -v edid_preferred_dtds >/dev/null 2>&1; then
+      preferred=$(edid_preferred_dtds <<<"$output" | sort -k1,1nr -k2,2nr | head -n 1)
+      if [[ -n $preferred ]]; then
+        resolution=$(awk '{ print $1 "x" $2 }' <<<"$preferred")
+      fi
+    fi
     if [[ $resolution =~ ^[0-9]+x[0-9]+$ ]]; then
       if [[ -n ${cache_file:-} ]]; then
         umask 077

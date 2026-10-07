@@ -1057,7 +1057,7 @@ Panel {
   function keepDisplayLayout(profileChoice, profileId) {
     if (!root.layoutConfirmationPending || root.layoutApplying || !root.layoutTransactionId) return
     var status = String((root.profileMatch || {}).status || "new")
-    if ((status === "weak" || status === "ambiguous") && !profileChoice) {
+    if (root.displayConfirmationPolicy.kind === "identify-first" && !profileChoice) {
       root.layoutError = "Identify and map uncertain displays before keeping this profile."
       return
     }

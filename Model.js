@@ -941,6 +941,22 @@ function displayConfirmationPolicy(match) {
     }
   }
   if (status === "weak" || status === "ambiguous") {
+    // A complete weak match maps every connected display 1:1 onto a saved
+    // display on the same connector with matching make, model, and size.
+    // No display can silently swap in that state, and the user explicitly
+    // confirms the exact preview on screen, so a manual keep is safe even
+    // when the monitor reports an unstable serial or EDID. Ambiguous ties
+    // and incomplete matches still require Identify.
+    var matches = Array.isArray(match.matches) ? match.matches : []
+    var complete = matches.length > 0
+      && matches.every(function(item) { return item && item.savedName })
+      && (!Array.isArray(match.unmatchedSavedNames) || match.unmatchedSavedNames.length === 0)
+    if (status === "weak" && complete)
+      return {
+        kind: "keep-uncertain",
+        profileId: profileId,
+        message: "Display identity is unconfirmed, but each display matches a saved display on the same connector, so no display can silently swap."
+      }
     return {
       kind: "identify-first",
       profileId: profileId,

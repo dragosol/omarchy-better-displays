@@ -55,7 +55,10 @@ edid_cached_info() {
     printf '%s\n' "$info"
     return 0
   fi
-  info=$(LC_ALL=C "$decoder" -X "$edid_file" 2>/dev/null | edid_modes_from_xmodelines) || info=""
+  local full preferred
+  full=$(LC_ALL=C "$decoder" "$edid_file" 2>/dev/null) || full=""
+  preferred=$(printf '%s\n' "$full" | edid_preferred_dtds)
+  info=$(LC_ALL=C "$decoder" -X "$edid_file" 2>/dev/null | edid_modes_from_xmodelines "$preferred") || info=""
   [[ -n $info ]] || { edid_empty_info; return 0; }
   if [[ -n $hash ]]; then
     ( umask 077; mkdir -p "$cache_root" \
@@ -77,9 +80,29 @@ edid_infos_json() {
   printf '%s\n' "$infos"
 }
 
-# Reads `edid-decode -X` output on stdin. The first progressive modeline is the
-# EDID preferred timing, which is the panel's native mode.
+# Reads `edid-decode` output on stdin and prints "width height refresh" for
+# each DTD the firmware explicitly marks preferred (trailing "preferred" tag).
+# Some panels list a compatibility timing first in the base block while the
+# real native timing is preferred in an extension block; the explicit flag
+# wins over position.
+edid_preferred_dtds() {
+  awk '
+    /preferred\)$/ {
+      for (i = 1; i <= NF; i++)
+        if ($i ~ /^[0-9]+x[0-9]+$/) { split($i, wh, "x"); print wh[1], wh[2], $(i + 1); break }
+    }'
+}
+
+# Reads `edid-decode -X` output on stdin. The first progressive modeline is
+# the EDID preferred timing, which is the panel's native mode. DTDs the
+# firmware explicitly flags preferred (edid_preferred_dtds, optional $1) win
+# over position; with several, the largest is native.
 edid_modes_from_xmodelines() {
+  local preferred=${1:-} pref_json
+  pref_json=$(printf '%s\n' "$preferred" | jq -Rsc '
+    [split("\n")[] | select(length > 0) | [splits(" +")] | select(length == 3)
+      | {width: (.[0] | tonumber), height: (.[1] | tonumber),
+         refreshRate: (.[2] | tonumber)}]')
   awk '
     $1 == "Modeline" && NF >= 11 && tolower($0) !~ /interlace|doublescan/ {
       clock = $3 + 0
@@ -93,15 +116,22 @@ edid_modes_from_xmodelines() {
       modeline = sprintf("%.3f %d %d %d %d %d %d %d %d%s", clock, $4, $5, $6, $7, $8, $9, $10, $11, sync)
       printf "%d\t%d\t%.2f\t%s\n", hdisp, vdisp, refresh, modeline
     }
-  ' | jq -Rsc '
+  ' | jq -Rsc --argjson pref "$pref_json" '
     [split("\n")[] | select(length > 0) | split("\t")
       | {width: (.[0] | tonumber), height: (.[1] | tonumber),
          refreshRate: (.[2] | tonumber), modeline: ("modeline " + .[3])}
       | . + {mode: "\(.width)x\(.height)@\(.refreshRate)Hz"}]
     | reduce .[] as $m ([]; if any(.[]; .width == $m.width and .height == $m.height
         and ((.refreshRate - $m.refreshRate) | fabs) <= 0.05) then . else . + [$m] end)
-    | {native: (.[0] // null | if . == null then null else {width, height, refreshRate} end),
-       modes: .}'
+    | . as $modes
+    | (if ($pref | length) > 0
+       then ($modes
+            | map(select(. as $m | any($pref[]; .width == $m.width and .height == $m.height
+                and ((.refreshRate - $m.refreshRate) | fabs) <= 0.5)))
+            | if length > 0 then max_by(.width * .height) else $modes[0] end)
+       else $modes[0] end) as $native
+    | {native: ($native | if . == null then null else {width, height, refreshRate} end),
+       modes: $modes}'
 }
 
 # edid_modeline_for <edid-info-json> <width> <height> <refresh>
