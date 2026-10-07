@@ -2,6 +2,24 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.0] - 2026-10-07
+
+### Fixed
+
+- The native mode is now taken from the timing a panel explicitly flags as
+  preferred, rather than from whichever modeline happens to come first. Some
+  panels list a compatibility timing in the base block and only mark the real
+  native timing as preferred in a CTA extension block, so their true native
+  resolution was reported as something lower and was hard to find. Seen on a
+  Samsung C49RG9x, which listed 3840x1080 as native while explicitly preferring
+  5120x1440.
+- A profile that matches a display only weakly can be kept instead of being
+  forked into a new one. EDID details can shift between boots on the same
+  physical panel, which used to produce a second profile and send you back to
+  Identify; choosing Keep now updates the profile you already have.
+
+Both fixed by Clément Beaujoin (#2).
+
 ## [1.0.1] - 2026-09-24
 
 ### Fixed
