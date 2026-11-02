@@ -156,9 +156,12 @@ An older schema-v1 `~/.local/state/omarchy/displays/layout.json` is kept as a
 backup, imported only when its connector set matches exactly, and removed after
 the first successful schema-v2 Keep.
 
-The plugin never edits `~/.config/hypr/monitors.lua`. That file remains the
-fallback: to discard saved profiles, delete `profiles.json` and run
-`hyprctl reload`.
+The plugin never edits the monitor rules in `~/.config/hypr/monitors.lua`. The
+only lines it touches there are Omarchy's own `omarchy_monitor_scale` and
+`omarchy_gdk_scale` knobs, when the file has them, kept in step with the
+internal panel's kept scale the way `omarchy-hyprland-monitor-scaling` does.
+That file remains the fallback: to discard saved profiles, delete
+`profiles.json` and run `hyprctl reload`.
 
 ## Configure
 
@@ -170,7 +173,10 @@ you keep a change. A few things are worth knowing:
   file forgets every remembered layout.
 - **Measure from** picks the anchor display that saved positions are measured
   from, so layouts stay put when another display is added or removed.
-- **Your Hyprland `monitors.lua` is never edited.** It stays the fallback for
+- **Your monitor rules in `monitors.lua` are never edited.** If the file has
+  Omarchy's `omarchy_monitor_scale` / `omarchy_gdk_scale` knobs, those two
+  lines follow the internal panel's kept scale, as Omarchy's own scale tool
+  does, so idle-wake doesn't reset it. The file stays the fallback for
   displays the plugin has never seen and for when the plugin is removed.
 - **Kept layouts survive Hyprland reloads.** Hyprland re-applies its monitor
   rules on a config reload and on some runtime changes, such as switching a

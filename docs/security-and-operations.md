@@ -37,12 +37,15 @@ saved topology. Expired claims do not block restore.
 | `${XDG_RUNTIME_DIR:-/tmp}/omarchy-displays-edid/` | Mode `0600` EDID hash/native-resolution cache | Runtime cache |
 | `${XDG_STATE_HOME:-~/.local/state}/omarchy/displays/profiles.json` | Mode `0600` versioned profile store (schema v2): profiles, connected sets, topology, workspace assignments | Persists until the user removes it |
 | `${XDG_STATE_HOME:-~/.local/state}/omarchy/displays/layout.json` | Legacy schema-v1 layout, retained as a recovery backup after migration | Removed only after the first confirmed v2 Keep; pre-migration files are never deleted without a match |
+| `${XDG_STATE_HOME:-~/.local/state}/omarchy/toggles/hypr/displays-remembered.lua` | Mode `0644` `hl.monitor` and `hl.workspace_rule` calls for the last kept layout, built from validated names and numbers; Omarchy loads it after `monitors.lua` on every config load | Rewritten on change; persists until the user removes it |
+| `${XDG_CONFIG_HOME:-~/.config}/hypr/monitors.lua` | Only the `omarchy_monitor_scale` and `omarchy_gdk_scale` lines, when both the file and Omarchy's laptop-display helper are present, kept in step with the internal panel's kept scale like `omarchy-hyprland-monitor-scaling` | Written only when the value changes |
 
-Writes use private permissions and same-directory temporary files followed by
+State and runtime writes use private permissions and same-directory temporary files followed by
 atomic rename. Runtime paths must be user-owned, non-symlink directories;
 `XDG_RUNTIME_DIR` is additionally required to deny group and other access. The
-plugin does not edit `monitors.lua`, `hyprland.lua`, shell configuration, or
-package-owned files.
+plugin does not edit the monitor rules in `monitors.lua`, `hyprland.lua`,
+shell configuration, or package-owned files; in `monitors.lua` it only
+rewrites the two Omarchy scale knobs listed above.
 
 ### Schema-v2 profile contents
 
