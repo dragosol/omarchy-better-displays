@@ -137,7 +137,8 @@ apply_payload() {
   # compositor transaction. Non-mirrored layouts retain their single eval.
   for lua_code in "$lua_code" "$mirror_code"; do
     [[ -n $lua_code ]] || continue
-    if ! error=$(hyprctl eval "$lua_code" 2>&1 >/dev/null); then
+    # hyprctl eval prints Lua errors on stdout, so keep both streams.
+    if ! error=$(hyprctl eval "$lua_code" 2>&1); then
       jq -cn --arg detail "$error" \
         '[{code: "compositor-rejected", output: "", detail: $detail}]' >&2
       return 1
@@ -148,7 +149,7 @@ apply_payload() {
 apply_workspace_payload() {
   local workspaces="$1"
   local lua_code=""
-  local statement workspace monitor is_default
+  local statement workspace monitor is_default error
   declare -A default_written=()
 
   while IFS=$'\t' read -r workspace monitor; do
@@ -163,7 +164,13 @@ apply_workspace_payload() {
     lua_code+="$statement"
   done < <(jq -r 'to_entries | sort_by(.key | tonumber) | .[] | [.key, .value] | @tsv' <<<"$workspaces")
 
-  [[ -z $lua_code ]] || hyprctl eval "$lua_code" >/dev/null
+  [[ -z $lua_code ]] && return 0
+  # hyprctl eval prints Lua errors on stdout, so keep both streams.
+  if ! error=$(hyprctl eval "$lua_code" 2>&1); then
+    jq -cn --arg detail "$error" \
+      '[{code: "workspace-rejected", output: "", detail: $detail}]' >&2
+    return 1
+  fi
 }
 
 current_connected_names() {
