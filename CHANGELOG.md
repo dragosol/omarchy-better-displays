@@ -2,6 +2,15 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.1] - 2026-11-02
+
+### Fixed
+
+- The panel rendered black on Qt 6.12. Qt 6.12 added its own `Color` type to
+  QtQuick, and it hid Omarchy's `Color` palette from `qs.Commons`, so every
+  theme colour came out undefined. Theme colours are now read as
+  `Commons.Color`, the form Omarchy's own shell uses.
+
 ## [1.1.0] - 2026-10-07
 
 ### Fixed

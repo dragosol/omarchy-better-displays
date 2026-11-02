@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 Item {
@@ -65,8 +66,8 @@ Item {
       width: Math.min(Style.space(380), Math.max(Style.space(280), parent.width - Style.space(32)))
       height: content.implicitHeight + Style.space(36)
       radius: Style.cornerRadius
-      color: Color.popups.background
-      borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border,
+      color: Commons.Color.popups.background
+      borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border,
                                      Math.max(1, Style.normalBorderWidth))
 
       Column {

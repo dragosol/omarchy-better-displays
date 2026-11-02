@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 
 PanelWindow {
   id: overlay
@@ -49,8 +50,8 @@ PanelWindow {
     id: workspace
     anchors.fill: parent
     anchors.margins: Style.space(24)
-    color: Color.popups.background
-    borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border,
+    color: Commons.Color.popups.background
+    borderSpec: Border.surfaceSpec("popups", "border", Commons.Color.popups.border,
                                    Math.max(1, Style.space(2)))
     radius: Style.cornerRadius
 
@@ -204,7 +205,7 @@ PanelWindow {
         clip: true
         radius: Style.cornerRadius
         color: Style.normalFillFor(overlay.foreground)
-        borderSpec: Border.controlSpec("normal", overlay.foreground, Color.accent)
+        borderSpec: Border.controlSpec("normal", overlay.foreground, Commons.Color.accent)
 
         onWidthChanged: if (overlay.visible) Qt.callLater(controller.refitDisplayLayout)
         onHeightChanged: if (overlay.visible) Qt.callLater(controller.refitDisplayLayout)

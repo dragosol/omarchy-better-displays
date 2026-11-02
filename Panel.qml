@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 import "Model.js" as Model
 import "TopologyModel.js" as Topology
 import "DisplayEventModel.js" as DisplayEvents
@@ -2139,8 +2140,8 @@ Panel {
               visible: root.setupSuggested
               width: parent.width
               implicitHeight: setupColumn.implicitHeight + Style.space(16)
-              color: Style.selectedFillFor(root.bar.foreground, Color.accent)
-              borderSpec: Border.controlSpec("selected", root.bar.foreground, Color.accent)
+              color: Style.selectedFillFor(root.bar.foreground, Commons.Color.accent)
+              borderSpec: Border.controlSpec("selected", root.bar.foreground, Commons.Color.accent)
               radius: Style.cornerRadius
 
               Column {
@@ -2217,7 +2218,7 @@ Panel {
             clip: true
             radius: Style.cornerRadius
             color: Style.normalFillFor(root.bar.foreground)
-            borderSpec: Border.controlSpec("normal", root.bar.foreground, Color.accent)
+            borderSpec: Border.controlSpec("normal", root.bar.foreground, Commons.Color.accent)
             onWidthChanged: root.scheduleDisplayLayoutReset()
             onHeightChanged: root.scheduleDisplayLayoutReset()
 
@@ -2272,8 +2273,8 @@ Panel {
               visible: root.layoutConfirmationPending
               width: parent.width
               implicitHeight: confirmationText.implicitHeight + Style.spacing.controlPaddingY * 2
-              color: Style.selectedFillFor(root.bar.foreground, Color.accent)
-              borderSpec: Border.controlSpec("selected", root.bar.foreground, Color.accent)
+              color: Style.selectedFillFor(root.bar.foreground, Commons.Color.accent)
+              borderSpec: Border.controlSpec("selected", root.bar.foreground, Commons.Color.accent)
               radius: Style.cornerRadius
 
               Text {
@@ -2478,10 +2479,10 @@ Panel {
                   width: profileList.width
                   implicitHeight: profileRow.implicitHeight + Style.space(8)
                   color: modelData.id === root.activeProfileId
-                    ? Style.selectedFillFor(root.bar.foreground, Color.accent)
+                    ? Style.selectedFillFor(root.bar.foreground, Commons.Color.accent)
                     : Style.normalFillFor(root.bar.foreground)
                   borderSpec: Border.controlSpec(modelData.id === root.activeProfileId ? "selected" : "normal",
-                                                 root.bar.foreground, Color.accent)
+                                                 root.bar.foreground, Commons.Color.accent)
                   radius: Style.cornerRadius
 
                   Row {
@@ -2525,7 +2526,7 @@ Panel {
                         tooltipText: "Delete profile"
                         enabled: !root.profileActionBusy
                         foreground: root.bar.foreground
-                        hoverColor: Color.urgent
+                        hoverColor: Commons.Color.urgent
                         onClicked: root.requestProfileDelete(modelData.id)
                       }
                     }
@@ -2628,9 +2629,9 @@ Panel {
               implicitHeight: insightColumn.implicitHeight + Style.space(16)
               radius: Style.cornerRadius
               color: root.modeInsight.level === "ok" ? Style.normalFillFor(root.bar.foreground)
-                : Style.selectedFillFor(root.bar.foreground, Color.accent)
+                : Style.selectedFillFor(root.bar.foreground, Commons.Color.accent)
               borderSpec: Border.controlSpec(root.modeInsight.level === "ok" ? "normal" : "selected",
-                                             root.bar.foreground, Color.accent)
+                                             root.bar.foreground, Commons.Color.accent)
 
               Column {
                 id: insightColumn
@@ -2690,8 +2691,8 @@ Panel {
               visible: !!root.selectedDisplay && !!root.selectedDisplay.mirrorOf && root.selectedDisplay.mirrorOf !== "none"
               width: parent.width
               implicitHeight: mirrorInfoText.implicitHeight + Style.spacing.controlPaddingY * 2
-              color: Style.selectedFillFor(root.bar.foreground, Color.accent)
-              borderSpec: Border.controlSpec("selected", root.bar.foreground, Color.accent)
+              color: Style.selectedFillFor(root.bar.foreground, Commons.Color.accent)
+              borderSpec: Border.controlSpec("selected", root.bar.foreground, Commons.Color.accent)
               radius: Style.cornerRadius
 
               Text {

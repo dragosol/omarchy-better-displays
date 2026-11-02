@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 
 BorderSurface {
   id: tile
@@ -38,12 +39,12 @@ BorderSurface {
   z: drag.active || editing || selected ? 2 : 1
   radius: Style.cornerRadius
   color: selected
-    ? Style.selectedFillFor(foreground, Color.accent)
+    ? Style.selectedFillFor(foreground, Commons.Color.accent)
     : (hasCursor || display.focused
-       ? Style.hoverFillFor(foreground, Color.accent) : "transparent")
+       ? Style.hoverFillFor(foreground, Commons.Color.accent) : "transparent")
   borderSpec: Border.controlSpec(
     drag.active || editing || selected || hasCursor ? "hover-cursor" : "normal",
-    foreground, Color.accent)
+    foreground, Commons.Color.accent)
 
   Column {
     anchors.centerIn: parent
@@ -71,7 +72,7 @@ BorderSurface {
            || Math.round(tile.display.logicalWidth) + " × " + Math.round(tile.display.logicalHeight))
       textFormat: Text.PlainText
       color: tile.display.mirrorOf && tile.display.mirrorOf !== "none"
-        ? Color.accent
+        ? Commons.Color.accent
         : Qt.darker(tile.foreground, 1.35)
       font.family: tile.fontFamily
       font.pixelSize: Style.font.caption
@@ -94,7 +95,7 @@ BorderSurface {
           height: Style.space(16)
           radius: height / 2
           color: Style.normalFillFor(tile.foreground)
-          borderSpec: Border.controlSpec("normal", tile.foreground, Color.accent)
+          borderSpec: Border.controlSpec("normal", tile.foreground, Commons.Color.accent)
 
           Text {
             anchors.centerIn: parent
@@ -113,7 +114,7 @@ BorderSurface {
         height: Style.space(16)
         radius: height / 2
         color: Style.normalFillFor(tile.foreground)
-        borderSpec: Border.controlSpec("normal", tile.foreground, Color.accent)
+        borderSpec: Border.controlSpec("normal", tile.foreground, Commons.Color.accent)
 
         Text {
           anchors.centerIn: parent
