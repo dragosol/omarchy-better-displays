@@ -141,7 +141,9 @@ the previous layout back and forgets any profile the restore created. When
 several profiles match, the one you selected or changed most recently wins.
 
 Monitors are recognised by their serial number or EDID, never by make and
-model alone, so identical monitors without serials are not guessed at.
+model alone, so identical monitors without serials are not guessed at: they are
+told apart by the port they are plugged into, and their layout comes back only
+while each one is on the port it was kept on.
 Restoring waits for the connection to settle, runs once per connected set, and
 never interrupts a change you are making in the panel.
 
@@ -179,9 +181,13 @@ you keep a change. A few things are worth knowing:
   `~/.local/state/omarchy/toggles/hypr/displays-remembered.lua`, which Omarchy
   loads after `monitors.lua`. Displays are matched by monitor description (make,
   model and serial), or by connector name when a description contains unusual
-  characters. The file only ever contains `hl.monitor` and `hl.workspace_rule`
-  calls built from validated names and numbers. Delete it to fall back to
-  `monitors.lua`.
+  characters or is shared by identical monitors. The file only contains
+  `hl.monitor` and `hl.workspace_rule` calls built from validated names and
+  numbers, plus, when a display is kept off, a guard that switches it off only
+  while a display the layout keeps on is connected (read from
+  `/sys/class/drm/*/status`) and switches it back on when that display is
+  unplugged, so a laptop never boots or undocks to a dark screen. Delete it to
+  fall back to `monitors.lua`.
 - **Emergency revert:** if a preview ever leaves you without a usable screen,
   run `omarchy shell omarchy.monitor revert`, or bind it yourself in your
   Hyprland configuration:

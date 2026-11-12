@@ -96,6 +96,11 @@ function candidate(saved, current, counts) {
     return { score: 3, status: "moved", reason: "strong monitor identity moved to another connector" }
 
   if (sameWeakIdentity(saved, current)) {
+    // Identical monitors without serials differ only by where they are
+    // plugged in. The very same connector outranks one that merely shares its
+    // number (DP-1 and HDMI-A-1 are both instance 1), which would be a tie.
+    if (connectorMatch && text(saved.name) === text(current.name))
+      return { score: 2.5, status: "weak", reason: "make, model, size, and connector match" }
     var savedInstance = saved.connectorInstance
     var currentInstance = current.connectorInstance
     if (savedInstance !== null && savedInstance !== undefined

@@ -516,4 +516,18 @@ jq -e --arg id "$weak_active" '.profiles[] | select(.id == $id)
 rm -rf "$test_root/empty-sysfs"/card0-*
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
+# A headless output (Sidecar) runs at a size it does not advertise. Its running
+# mode counts as available, so a layout that includes it can be kept (#4).
+headless='[{"id":0,"name":"eDP-1","make":"Test","model":"T2","serial":"SN2","width":2880,"height":1800,"refreshRate":60,"x":0,"y":0,"scale":2,"transform":0,"focused":true,"disabled":false,"mirrorOf":"none","availableModes":["2880x1800@60.00Hz"]},{"id":1,"name":"SIDECAR-iPad-x1","make":"","model":"","serial":"","description":"","width":2732,"height":2048,"refreshRate":60,"x":1440,"y":0,"scale":2,"transform":0,"focused":false,"disabled":false,"mirrorOf":"none","availableModes":["1920x1080@60.00Hz"]}]'
+printf '%s' "$headless" >"$test_root/monitors.json"
+headless_before='[{"name":"eDP-1","x":0,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0},{"name":"SIDECAR-iPad-x1","x":1440,"y":0,"width":2732,"height":2048,"refreshRate":60,"scale":2,"transform":0}]'
+headless_left='[{"name":"eDP-1","x":0,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0},{"name":"SIDECAR-iPad-x1","x":-1366,"y":56,"width":2732,"height":2048,"refreshRate":60,"scale":2,"transform":0}]'
+run_layout preview headless "$headless_left" "$headless_before" '{}'
+run_layout keep headless
+jq -e '.[] | select(.name == "SIDECAR-iPad-x1") | .x == -1366 and .y == 56' "$test_root/monitors.json" >/dev/null
+# A mode the output neither advertises nor runs is still refused.
+headless_bad=$(jq -c 'map(if .name == "SIDECAR-iPad-x1" then .width = 1024 | .height = 768 else . end)' <<<"$headless_left")
+! run_layout preview headless-bad "$headless_bad" "$headless_left" '{}' 2>/dev/null
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+
 echo "apply layout transaction tests passed"

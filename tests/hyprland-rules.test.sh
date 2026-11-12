@@ -55,4 +55,75 @@ DISPLAYS_HYPRLAND_RULES=0 bash "$script" preview seed2 "$proposal" "$proposal" '
 DISPLAYS_HYPRLAND_RULES=0 bash "$script" keep seed2
 test ! -e "$rules"
 
+rm -f "$rules"
+# Identical monitors without serials share one description (#1). A desc: rule
+# would land on both, so they are written by connector; the unique one keeps desc:.
+printf '%s' '[
+ {"name":"HDMI-A-1","description":"LG Electronics 23MB35 0x01010101","serial":"0x01010101","make":"LG Electronics","model":"23MB35","width":1920,"height":1080,"refreshRate":60,"x":0,"y":0,"scale":1,"availableModes":["1920x1080@60Hz"]},
+ {"name":"DP-3","description":"LG Electronics 23MB35 0x01010101","serial":"0x01010101","make":"LG Electronics","model":"23MB35","width":1920,"height":1080,"refreshRate":60,"x":1920,"y":0,"scale":1,"availableModes":["1920x1080@60Hz"]},
+ {"name":"DP-2","description":"Dell Inc. DELL U2720Q 1234ABC","serial":"1234ABC","make":"Dell Inc.","model":"DELL U2720Q","width":1920,"height":1080,"refreshRate":60,"x":3840,"y":0,"scale":1,"availableModes":["1920x1080@60Hz"]}
+]' > "$HYPRCTL_MONITORS"
+twins='[{"name":"HDMI-A-1","width":1920,"height":1080,"refreshRate":60,"x":1920,"y":0,"scale":1,"transform":0},{"name":"DP-3","width":1920,"height":1080,"refreshRate":60,"x":0,"y":0,"scale":1,"transform":0},{"name":"DP-2","width":1920,"height":1080,"refreshRate":60,"x":3840,"y":0,"scale":1,"transform":0}]'
+bash "$script" preview twins "$twins" "$twins" '{"1":"DP-3"}'
+bash "$script" keep twins
+grep -Fq 'hl.monitor({ output = "HDMI-A-1", disabled = false, mode = "1920x1080@60", position = "1920x0"' "$rules"
+grep -Fq 'hl.monitor({ output = "DP-3", disabled = false, mode = "1920x1080@60", position = "0x0"' "$rules"
+grep -Fq 'hl.monitor({ output = "desc:Dell Inc. DELL U2720Q 1234ABC", disabled = false' "$rules"
+grep -Fq 'hl.workspace_rule({ workspace = "1", monitor = "DP-3", default = true, persistent = true })' "$rules"
+! grep -q 'desc:LG Electronics' "$rules"
+
+# The built-in panel kept off with only an external on (#3). Hyprland loads
+# the rules plugged in or not, so the panel may only be switched off while the
+# external is connected, and comes back when the external is unplugged.
+printf '%s' '[
+ {"name":"eDP-1","description":"LG Display 0x07C6","serial":"","make":"LG Display","model":"0x07C6","width":2880,"height":1800,"refreshRate":120,"x":0,"y":0,"scale":2,"availableModes":["2880x1800@120Hz"]},
+ {"name":"DP-1","description":"LG Electronics LG TV SSCR2 0x01010101","serial":"0x01010101","make":"LG Electronics","model":"LG TV SSCR2","width":3840,"height":2160,"refreshRate":120,"x":1440,"y":0,"scale":1.6,"availableModes":["3840x2160@120Hz"]}
+]' > "$HYPRCTL_MONITORS"
+external_only='[{"name":"eDP-1","enabled":false},{"name":"DP-1","width":3840,"height":2160,"refreshRate":120,"x":0,"y":0,"scale":1.6,"transform":0}]'
+bash "$script" preview lidopen "$external_only" "$external_only" '{}'
+bash "$script" keep lidopen
+grep -Fq 'local kept_on = { "DP-1" }' "$rules"
+grep -Fxq '  hl.monitor({ output = "desc:LG Display 0x07C6", disabled = true })' "$rules"
+# Never an unconditional disable.
+! grep -q '^hl.monitor({ .*disabled = true' "$rules"
+
+if command -v lua >/dev/null; then
+  drm="$root/drm"
+  cat >"$root/run-rules.lua" <<'LUA'
+local rules, drm, removed = arg[1], arg[2], arg[3]
+local source = assert(io.open(rules)):read("a"):gsub("/sys/class/drm", drm)
+local calls, handlers = {}, {}
+hl = {
+  monitor = function(rule)
+    calls[#calls + 1] = rule.output .. (rule.disabled and " off" or " on")
+  end,
+  workspace_rule = function() end,
+  get_monitors = function() return {} end,
+  on = function(event, fn) handlers[event] = fn end,
+}
+assert(load(source))()
+if removed ~= "" then
+  calls = {}
+  handlers["monitor.removed"]({ name = removed })
+end
+print(table.concat(calls, ";"))
+LUA
+  run_rules() { lua "$root/run-rules.lua" "$rules" "$drm" "${1:-}"; }
+  mkdir -p "$drm/card1-eDP-1" "$drm/card1-DP-1"
+  echo connected >"$drm/card1-eDP-1/status"
+  # Docked: the panel is switched off as kept.
+  echo connected >"$drm/card1-DP-1/status"
+  run_rules | grep -Fq 'desc:LG Display 0x07C6 off'
+  # The panel's own disable fires monitor.removed for it; that changes nothing.
+  test -z "$(run_rules eDP-1)"
+  # Booting or reloading without the external: the panel is never switched off.
+  echo disconnected >"$drm/card1-DP-1/status"
+  ! run_rules | grep -q 'desc:LG Display 0x07C6 off'
+  # Unplugged at runtime: the panel is switched back on.
+  test "$(run_rules DP-1)" = 'desc:LG Display 0x07C6 on'
+else
+  echo "lua not installed: skipping the generated-rules execution check" >&2
+fi
+
+cp "$rules" "${DUMP_RULES:-/dev/null}"
 echo "hyprland rules tests passed"

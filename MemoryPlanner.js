@@ -4,15 +4,19 @@
 // the way they were last set, without asking:
 //
 //   exact  - the same monitors on the same connectors: that profile, as saved.
+//            A weak match counts when every display is on the very connector it
+//            was saved on: identical monitors without serials can never match
+//            more strongly, and the user confirmed that layout on screen.
 //   moved  - the same strongly identified monitors on other connectors: the
 //            profile with connector names (and workspace owners) remapped.
 //   new    - any other combination: each strongly identified monitor gets the
 //            mode, scale and rotation it was last kept with, positioned where it
 //            last sat relative to a display that is also connected now, or to
-//            the right of the others. Unknown monitors keep their live settings.
+//            the right of the others. Unknown monitors keep their live settings,
+//            position included unless it overlaps a display already placed.
 //
-// Weak or ambiguous identities (identical monitors without serials) are never
-// guessed at; they keep their live settings.
+// Otherwise weak or ambiguous identities are never guessed at; they keep their
+// live settings.
 
 var Matcher = typeof require !== "undefined" ? require("./ProfileMatcher.js") : null
 
@@ -156,8 +160,11 @@ function perMonitorPlan(store, snapshot, current) {
 
   // Place displays: the built-in panel (or else the first remembered display)
   // stays at its live position; each remembered display keeps its saved
-  // offset from a display it was saved alongside that is already placed;
-  // anything else goes to the right of what has been placed.
+  // offset from a display it was saved alongside that is already placed; an
+  // unknown display keeps its live position unless that overlaps one already
+  // placed (a headless output such as Sidecar has no identity to remember, so
+  // moving it would undo every layout kept for it); anything else goes to the
+  // right of what has been placed.
   var liveCounts = identityCounts(current)
   var keyByName = {}
   current.forEach(function(identity) { keyByName[identity.name] = strongKey(identity, liveCounts) })
@@ -195,6 +202,21 @@ function perMonitorPlan(store, snapshot, current) {
         positioned = true
       }
     }
+    if (!positioned && !remembered && placedOrder.length > 0) {
+      var liveX = Number(live[name].x) || 0
+      var liveY = Number(live[name].y) || 0
+      var liveSize = logicalSize(record)
+      var overlaps = placedOrder.some(function(other) {
+        var size = logicalSize(proposed[other])
+        return liveX < placed[other].x + size.width && placed[other].x < liveX + liveSize.width
+          && liveY < placed[other].y + size.height && placed[other].y < liveY + liveSize.height
+      })
+      if (!overlaps) {
+        record.x = liveX
+        record.y = liveY
+        positioned = true
+      }
+    }
     if (!positioned) {
       record.x = rightEdge === null ? (Number(live[name].x) || 0) : rightEdge
       record.y = rightEdge === null ? (Number(live[name].y) || 0) : 0
@@ -219,7 +241,12 @@ function plan(store, snapshot) {
   var status = Matcher.profileStatus(store, snapshot)
   var profile = (store.profiles || []).filter(function(p) { return p.id === status.profileId })[0]
 
-  if (profile && status.status === "exact" && !status.legacyConnectorOnly) {
+  var onSavedConnectors = status.status === "weak" && (status.matches || []).length > 0
+    && status.matches.every(function(match) {
+      return match.status === "exact"
+        || (match.status === "weak" && match.savedName && match.savedName === match.currentName)
+    })
+  if (profile && (status.status === "exact" || onSavedConnectors) && !status.legacyConnectorOnly) {
     return { source: "exact", profileId: profile.id, profileName: profile.name, status: status,
       monitors: profile.topology.monitors, workspaces: profile.topology.workspaces || {},
       anchor: text(profile.topology.anchor) }

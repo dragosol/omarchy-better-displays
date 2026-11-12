@@ -175,7 +175,11 @@ current_connected_names() {
 validate_proposal() {
   local payload="$1" snapshot="$2" reasons
   reasons=$(jq -cn --argjson payload "$payload" --argjson snapshot "$snapshot" '
-    def modes($m): [($m.modes // [])[] | match("^(?<w>[0-9]+)x(?<h>[0-9]+)@(?<r>[0-9]+(\\.[0-9]+)?)Hz?$")
+    # The mode an output is running counts as available even when it is not
+    # advertised: a headless output (Sidecar, VNC) advertises only 1920x1080
+    # but runs at whatever size its creator set, and keeping it must not fail.
+    def modes($m): [(($m.modes // []) + [$m.mode // empty])[]
+      | match("^(?<w>[0-9]+)x(?<h>[0-9]+)@(?<r>[0-9]+(\\.[0-9]+)?)(Hz)?$")
       | {width: (.captures[0].string | tonumber), height: (.captures[1].string | tonumber),
          refreshRate: (.captures[2].string | tonumber)}];
     ($snapshot.topology | map({key: .name, value: .}) | from_entries) as $by_name
@@ -336,7 +340,7 @@ recovery_payload_for_snapshot() {
   local previous="$1" snapshot="$2"
   jq -cn --argjson previous "$previous" --argjson snapshot "$snapshot" '
     def parsedMode($mode):
-      ($mode | match("^(?<w>[0-9]+)x(?<h>[0-9]+)@(?<r>[0-9]+(\\.[0-9]+)?)Hz?$")) as $m
+      ($mode | match("^(?<w>[0-9]+)x(?<h>[0-9]+)@(?<r>[0-9]+(\\.[0-9]+)?)(Hz)?$")) as $m
       | {width: ($m.captures[0].string | tonumber),
          height: ($m.captures[1].string | tonumber),
          refreshRate: ($m.captures[2].string | tonumber)};
@@ -532,20 +536,63 @@ sync_hyprland_rules() {
   lines=$(jq -r --argjson live "$live" --argjson modelines "$modelines" --argjson workspaces "$workspaces" '
     def safe_desc: test("^[A-Za-z0-9 ._()+-]{1,120}$");
     ($live | map({key: .name, value: (.description // "")}) | from_entries) as $desc
+    # Hyprland matches desc: by prefix. Identical monitors without a real serial
+    # share one description, so a desc: rule would land on both of them; those,
+    # and any description that prefixes another connected one, use the connector.
+    | [$live[] | .description // "" | select(. != "")] as $descs
     | def ident($name): (($desc[$name] // "") as $d
-        | if ($d | safe_desc) then "desc:" + $d else $name end);
+        | if ($d | safe_desc) and ([$descs[] | select(startswith($d))] | length) == 1
+          then "desc:" + $d else $name end);
     def num: tostring;
-    ([.[] | if .enabled == false then
-        "hl.monitor({ output = \"\(ident(.name))\", disabled = true })"
-      else
-        "hl.monitor({ output = \"\(ident(.name))\", disabled = false, mode = \"\($modelines[.name] // "\(.width)x\(.height)@\(.refreshRate)")\", position = \"\(.x)x\(.y)\", scale = \(.scale | num), transform = \((.transform // 0) | num)"
-        + (if (.mirrorOf // "") != "" then ", mirror = \"\(.mirrorOf)\"" else "" end) + " })"
-      end]
+    def quoted_list: map("\"\(.)\"") | join(", ");
+    . as $payload
+    | [.[] | select(.enabled == false) | ident(.name)] as $off
+    | [.[] | select(.enabled != false)
+        | "hl.monitor({ output = \"\(ident(.name))\", disabled = false, mode = \"\($modelines[.name] // "\(.width)x\(.height)@\(.refreshRate)")\", position = \"\(.x)x\(.y)\", scale = \(.scale | num), transform = \((.transform // 0) | num)"
+          + (if (.mirrorOf // "") != "" then ", mirror = \"\(.mirrorOf)\"" else "" end) + " })"]
+    # Hyprland loads these rules on every config load, plugged in or not. A
+    # display kept off (usually the built-in panel, with only an external on)
+    # therefore stays off only while a display this layout keeps on is
+    # connected: unplugging it, or starting without it, must never leave every
+    # screen dark. Connection is read from the DRM connector status, or for a
+    # headless output (no connector) from the outputs Hyprland has.
+    + (if ($off | length) == 0 then [] else [
+        "local kept_on = { \([$payload[] | select(.enabled != false) | .name] | quoted_list) }",
+        "local function connected(name, gone)",
+        "  local found = false",
+        "  for card = 0, 31 do",
+        "    local status = io.open(\"/sys/class/drm/card\" .. card .. \"-\" .. name .. \"/status\", \"r\")",
+        "    if status then",
+        "      found = true",
+        "      local state = status:read(\"l\")",
+        "      status:close()",
+        "      if state == \"connected\" then return true end",
+        "    end",
+        "  end",
+        "  if found then return false end",
+        "  for _, monitor in ipairs(hl.get_monitors()) do",
+        "    if monitor.name == name and name ~= gone then return true end",
+        "  end",
+        "  return false",
+        "end",
+        "local function kept_on_connected(gone)",
+        "  for _, name in ipairs(kept_on) do",
+        "    if connected(name, gone) then return true end",
+        "  end",
+        "  return false",
+        "end",
+        "if kept_on_connected() then"]
+      + [$off[] | "  hl.monitor({ output = \"\(.)\", disabled = true })"]
+      + ["end",
+        "hl.on(\"monitor.removed\", function(monitor)",
+        "  if kept_on_connected(monitor and monitor.name) then return end"]
+      + [$off[] | "  hl.monitor({ output = \"\(.)\", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\" })"]
+      + ["end)"] end)
     + ($workspaces | to_entries | sort_by(.key | tonumber)
         | reduce .[] as $e ({seen: {}, out: []};
             .out += ["hl.workspace_rule({ workspace = \"\($e.key)\", monitor = \"\(ident($e.value))\", default = \(if .seen[$e.value] then "false" else "true" end), persistent = true })"]
             | .seen[$e.value] = true)
-        | .out))
+        | .out)
     | .[]' <<<"$payload") || return 0
 
   sync_omarchy_scale_knob "$payload"

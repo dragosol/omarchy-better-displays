@@ -125,7 +125,10 @@ labels out of those tooltips and uses trusted static workspace guidance there.
 Match status is deliberately visible: `exact` may restore, `moved` requires an
 update-or-fork decision and fresh mode validation, `weak` and `ambiguous`
 require Identify/manual confirmation, and `new` creates a separate connected-
-set profile. Discovery and Refresh never write profile state.
+set profile. The one exception is automatic restore of a `weak` match in which
+every display is on the very connector it was kept on (identical monitors
+without serials can never match more strongly): it restores that profile as
+kept and updates nothing. Discovery and Refresh never write profile state.
 
 ## Failure and recovery
 

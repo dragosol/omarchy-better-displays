@@ -2,7 +2,7 @@
 // projector or PPI inference. Callers must use the normal preview transaction.
 function advertisedModes(display) {
   return (Array.isArray(display.availableModes) ? display.availableModes : []).map(function(raw) {
-    var m = String(raw).match(/^(\d+)x(\d+)@(\d+(?:\.\d+)?)Hz?$/)
+    var m = String(raw).match(/^(\d+)x(\d+)@(\d+(?:\.\d+)?)(?:Hz)?$/)
     return m ? {width:Number(m[1]), height:Number(m[2]), refreshRate:Number(m[3])} : null
   }).filter(function(m) { return m && m.width > 0 && m.height > 0 && m.refreshRate > 0 })
 }

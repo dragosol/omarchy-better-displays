@@ -320,7 +320,7 @@ function compatibleVariant(displays, preset, variant) {
     if (!live || !Array.isArray(live.availableModes) || live.availableModes.length === 0)
       return true
     return live.availableModes.some(function(mode) {
-      var match = String(mode).match(/^(\d+)x(\d+)@(\d+(?:\.\d+)?)Hz?$/)
+      var match = String(mode).match(/^(\d+)x(\d+)@(\d+(?:\.\d+)?)(?:Hz)?$/)
       return match && Number(match[1]) === Number(record.width)
         && Number(match[2]) === Number(record.height)
         && Math.abs(Number(match[3]) - Number(record.refreshRate)) <= 0.05
@@ -407,7 +407,7 @@ function workspacePayloadForPreset(assignments, payload, requestedAnchor) {
 function parsedAdvertisedModes(display) {
   return (display && Array.isArray(display.availableModes) ? display.availableModes : [])
     .map(function(mode) {
-      var match = String(mode).match(/^(\d+)x(\d+)@(\d+(?:\.\d+)?)Hz?$/)
+      var match = String(mode).match(/^(\d+)x(\d+)@(\d+(?:\.\d+)?)(?:Hz)?$/)
       return match ? {
         width: Number(match[1]), height: Number(match[2]), refreshRate: Number(match[3])
       } : null

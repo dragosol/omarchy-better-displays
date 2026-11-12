@@ -84,6 +84,14 @@ const twins = Matcher.matchIdentities(savedTwins, currentTwins)
 assert.deepEqual(twins.matches.map(match => match.status), ["ambiguous", "ambiguous"])
 assert.ok(twins.matches.every(match => match.savedName === null))
 
+// Twins on connectors that share a number (DP-1 and HDMI-A-1 are both
+// instance 1) still match the connector each was kept on, not a tie (#1).
+const twin = (name) => identity({ name, sysfsPath: "/sys/card0-" + name, connectorInstance: 1,
+  make: "LG", model: "23MB35", physicalWidth: 510, physicalHeight: 290 })
+const sameNumber = Matcher.matchIdentities([twin("DP-1"), twin("HDMI-A-1")], [twin("DP-1"), twin("HDMI-A-1")])
+assert.deepEqual(sameNumber.matches.map(match => [match.currentName, match.status, match.savedName]),
+  [["DP-1", "weak", "DP-1"], ["HDMI-A-1", "weak", "HDMI-A-1"]])
+
 // A unique EDID hash is strong evidence even without a serial, but moving it
 // still requires transport-dependent mode validation.
 const edidMove = Matcher.matchIdentities(

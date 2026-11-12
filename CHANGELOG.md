@@ -2,6 +2,32 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.2] - 2026-11-11
+
+### Fixed
+
+- A laptop could be left with no working screen. With a layout kept where the
+  built-in panel is off and only an external display is on, unplugging that
+  display, or starting the laptop without it, kept the panel off as well, and
+  Omarchy's own recovery could not turn it back on. A display kept off now
+  stays off only while a display the layout keeps on is connected: the panel
+  comes back on as soon as the external display is unplugged, and is never
+  switched off at startup without it. The remembered rules file is rewritten
+  in the new form the next time Better Displays Pro starts with a screen (#3).
+- Identical monitors without serial numbers can be arranged and remembered.
+  They share one monitor description, so the remembered rule for one of them
+  was also applied to the other, which sent one onto the other's position
+  and, after a reboot, could reload Hyprland over and over. They are now told
+  apart by the port they are plugged into. A saved layout for them is also
+  restored as kept, instead of having them moved to the right after every
+  Hyprland reload, and twins on ports with the same number (DP-1 and HDMI-A-1)
+  no longer count as an uncertain match (#1).
+- Headless outputs, such as an iPad through Sidecar, can be arranged. They run
+  at a size they do not advertise, so every layout that included one was
+  refused, and automatic restore moved them back to the right of the other
+  displays. Their current mode is now accepted, and a display with no identity
+  to remember keeps its position unless it overlaps another display (#4).
+
 ## [1.1.1] - 2026-11-02
 
 ### Fixed

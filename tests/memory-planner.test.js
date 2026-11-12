@@ -137,6 +137,47 @@ const store = { schemaVersion: 2, activeProfileId: "home", profiles: [home] }
 }
 
 {
+  // The same identical twins back on the connectors they were kept on (#1):
+  // they can only ever match weakly, so the profile is restored as saved
+  // instead of being re-placed to the right, also after a Hyprland reload.
+  const twins = snapshot([
+    { monitor: monitor("DP-1", "same-edid"), live: live("DP-1", "1920x1080@60", ["1920x1080@60.00Hz"], 0, 1) },
+    { monitor: monitor("DP-3", "same-edid"), live: live("DP-3", "1920x1080@60", ["1920x1080@60.00Hz"], 1920, 1) }
+  ])
+  const kept = [
+    { name: "DP-1", enabled: true, x: 1080, y: 0, width: 1920, height: 1080, refreshRate: 60, scale: 1, transform: 0 },
+    { name: "DP-3", enabled: true, x: 0, y: 0, width: 1920, height: 1080, refreshRate: 60, scale: 1, transform: 1 }
+  ]
+  const twinProfile = profile("twins", "2026-09-14T09:00:00Z", twins, kept)
+  const result = Planner.plan({ schemaVersion: 2, activeProfileId: "twins", profiles: [twinProfile] }, twins)
+  assert.equal(result.status.status, "weak")
+  assert.equal(result.source, "exact")
+  assert.equal(result.profileId, "twins")
+  assert.deepEqual(result.monitors, kept)
+
+  // Swapped onto other connectors they stay unguessed.
+  const swapped = snapshot([
+    { monitor: monitor("DP-2", "same-edid"), live: live("DP-2", "1920x1080@60", ["1920x1080@60.00Hz"], 0, 1) },
+    { monitor: monitor("DP-4", "same-edid"), live: live("DP-4", "1920x1080@60", ["1920x1080@60.00Hz"], 1920, 1) }
+  ])
+  assert.notEqual(Planner.plan({ schemaVersion: 2, activeProfileId: "twins", profiles: [twinProfile] }, swapped).source, "exact")
+}
+
+{
+  // A headless output (Sidecar) has no identity to remember. Kept to the left
+  // of the laptop, it stays there instead of being moved right again (#4).
+  const sidecar = { name: "SIDECAR-iPad-x1", edidHash: null, serial: null, serialTrusted: false, make: null,
+    model: null, physicalWidth: null, physicalHeight: null, preferredMode: null }
+  const withIpad = snapshot([laptop, { monitor: sidecar,
+    live: Object.assign(live("SIDECAR-iPad-x1", "2732x2048@60", ["1920x1080@60.00Hz"], -1366, 2), { y: 56 }) }])
+  withIpad.connectors[1] = { name: "SIDECAR-iPad-x1", sysfsPath: null, instance: null, transport: "unknown" }
+  const result = Planner.plan(store, withIpad)
+  assert.equal(result.source, "per-monitor")
+  const ipad = result.monitors.find(m => m.name === "SIDECAR-iPad-x1")
+  assert.deepEqual([ipad.x, ipad.y, ipad.width, ipad.scale], [-1366, 56, 2732, 2])
+}
+
+{
   assert.equal(Planner.plan({ profiles: [] }, homeSnap).source, "none")
 }
 
