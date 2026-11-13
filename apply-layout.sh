@@ -8,6 +8,16 @@ state_root="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/displays"
 layout_file="$state_root/layout.json"
 script_path=$(readlink -f "$0")
 script_dir=$(cd "$(dirname "$0")" && pwd)
+# Every wait for the shared restore lock is finite: a stuck holder fails the
+# waiter instead of hanging it.
+lock_wait="${LAYOUT_LOCK_WAIT:-30}"
+[[ $lock_wait =~ ^[1-9][0-9]{0,2}$ ]] || lock_wait=30
+take_lock() {
+  flock -x -w "$lock_wait" 9 || {
+    echo "Displays are busy with another change; try again" >&2
+    exit 75
+  }
+}
 source "$script_dir/monitor-snapshot-lib.sh"
 source "$script_dir/profile-store-lib.sh"
 
@@ -819,7 +829,7 @@ restore_layout() {
 # take the idempotent path above.
 restore_layout_locked() {
   (
-    flock -x 9
+    take_lock
     restore_layout
   ) 9>"$runtime_root/restore.lock"
 }
@@ -985,7 +995,24 @@ preview_layout() {
   printf '%s\n' "$scope" >"$transaction_dir/scope"
   printf '%s\n' "$origin_screen" >"$transaction_dir/origin-screen"
   printf '%s\n' "$origin_workspace" >"$transaction_dir/origin-workspace"
+  # The watchdog starts before anything is applied, so a preview that hangs or
+  # dies part-way is still reverted. It reverts only a transaction still
+  # pending, so one already kept, reverted or cleaned up is left alone. It
+  # waits a little longer than the on-screen countdown, which starts after
+  # this returns, and has its own deadline.
+  if [[ ${LAYOUT_WATCHDOG_DISABLED:-0} != 1 ]]; then
+    setsid -f timeout -k 5 "$(( duration + 120 ))" \
+      bash "$script_path" watchdog "$transaction_id" "$(( duration + 5 ))" \
+      >/dev/null 2>&1 9>&-
+  fi
   if ! apply_payload "$proposed"; then
+    # Ordinary outputs and mirrored ones are separate compositor transactions,
+    # so the first may already be live when a later one fails. Put the
+    # previous layout back before forgetting the transaction.
+    if ! topology_matches_snapshot "$previous" "$(monitor_snapshot 2>/dev/null || echo '{"topology":[]}')"; then
+      apply_payload_settled "$previous" >/dev/null 2>&1 \
+        || hyprctl reload >/dev/null 2>&1 || true
+    fi
     cleanup_transaction "$transaction_dir"
     trap - RETURN
     return 1
@@ -1000,11 +1027,6 @@ preview_layout() {
     return 8
   fi
   trap - RETURN
-
-  if [[ ${LAYOUT_WATCHDOG_DISABLED:-0} != 1 ]]; then
-    setsid -f bash "$script_path" watchdog "$transaction_id" "$duration" \
-      >/dev/null 2>&1 9>&-
-  fi
 }
 
 keep_layout() {
@@ -1150,7 +1172,7 @@ case "$command" in
     (( $# >= 5 && $# <= 10 )) || exit 2
     transaction_id=${2:-}
     validate_id "$transaction_id" || exit 2
-    ( flock -x 9
+    ( take_lock
       preview_layout "$transaction_id" "$3" "$4" "$5" "${6:-layout}" "${7:-}" "${8:-}" "${9:-}" "${10:-0}"
     ) 9>"$runtime_root/restore.lock"
     ;;
@@ -1191,7 +1213,7 @@ case "$command" in
     # History survives notification expiry. A stale Undo must not touch a
     # later manual transaction, or a restore made for a different display set.
     if [[ -f $runtime_root/$2/auto-undo.json ]]; then
-      ( flock -x 9; undo_auto_restore "$2" ) 9>"$runtime_root/restore.lock"
+      ( take_lock; undo_auto_restore "$2" ) 9>"$runtime_root/restore.lock"
       exit
     fi
     [[ -f $runtime_root/$2/proposed.json ]] || exit 0
@@ -1203,7 +1225,7 @@ case "$command" in
     # fence would skip it. Hyprland applies reloaded monitor rules over the
     # next frames and can overwrite a restore made too early, so re-check the
     # settled result and restore again until it holds.
-    ( flock -x 9
+    ( take_lock
       attempts=${RELOAD_RESTORE_ATTEMPTS:-4}
       settle=${RELOAD_RESTORE_SETTLE:-1.5}
       for ((attempt = 1; attempt <= attempts; attempt++)); do
@@ -1221,7 +1243,7 @@ case "$command" in
   auto-restore)
     (( $# == 3 )) || exit 2
     [[ $2 =~ ^[a-f0-9]{64}$ && $3 =~ ^(allow|block)$ ]] || exit 2
-    ( flock -x 9; auto_restore_layout "$2" "$3" ) 9>"$runtime_root/restore.lock"
+    ( take_lock; auto_restore_layout "$2" "$3" ) 9>"$runtime_root/restore.lock"
     ;;
   restore)
     (( $# == 1 )) || exit 2

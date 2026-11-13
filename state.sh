@@ -1,13 +1,15 @@
 #!/bin/bash
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
+# The panel runs this through bounded.sh (overall deadline, capped output);
+# each program it calls also has its own deadline below.
 source "$script_dir/monitor-state-lib.sh"
 source "$script_dir/monitor-snapshot-lib.sh"
 source "$script_dir/profile-store-lib.sh"
 source "$script_dir/edid-modes-lib.sh"
 state_root="${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/displays"
 
-monitors_json=$(hyprctl monitors all -j)
+monitors_json=$(timeout -k 1 5 hyprctl monitors all -j)
 monitors_json=$(normalize_monitor_mirror_sources "$monitors_json")
 focused_monitor=$(printf '%s\n' "$monitors_json" | jq -r '[.[] | select(.focused == true)][0].name // ""')
 preferred_resolutions='{}'
@@ -27,7 +29,8 @@ while IFS= read -r monitor_name; do
     '. + {($name): $info}' <<<"$edid_infos")
 done < <(jq -r '.[] | .name' <<<"$monitors_json")
 
-{ omarchy-brightness-display --monitor "$focused_monitor" 2>/dev/null; echo; } | head -n 1
+# ddcutil behind this can stall on a busy i2c bus: give it a short deadline.
+{ timeout -k 1 4 omarchy-brightness-display --monitor "$focused_monitor" 2>/dev/null; echo; } | head -n 1
 
 printf '%s\n' "$monitors_json" | jq -r '
   def internal: test("^(eDP|LVDS|DSI)-");
@@ -38,7 +41,7 @@ printf '%s\n' "$monitors_json" | jq -r '
 '
 
 printf '%s\n' "$focused_monitor"
-omarchy-hyprland-monitor-scaling 2>/dev/null || echo
+timeout -k 1 5 omarchy-hyprland-monitor-scaling 2>/dev/null || echo
 
 printf '%s\n' "$monitors_json" | jq -c --argjson preferred "$preferred_resolutions" --argjson edid "$edid_infos" '
   def transport:
@@ -89,9 +92,9 @@ printf '%s\n' "$monitors_json" | jq -c --argjson preferred "$preferred_resolutio
   }]
 '
 
-hyprctl workspaces -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
-hyprctl workspacerules -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
-bash "$script_dir/apply-layout.sh" pending 2>/dev/null || printf '%s\n' '{}'
+timeout -k 1 5 hyprctl workspaces -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
+timeout -k 1 5 hyprctl workspacerules -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
+timeout -k 1 10 bash "$script_dir/apply-layout.sh" pending 2>/dev/null || printf '%s\n' '{}'
 snapshot=$(monitor_snapshot "$monitors_json" 2>/dev/null) || snapshot='{}'
 printf '%s\n' "$snapshot"
 if profile_store_load && status=$(profile_store_status "$(<"$(profile_store_file)")" "$snapshot" 2>/dev/null); then

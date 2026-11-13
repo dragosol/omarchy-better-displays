@@ -11,6 +11,7 @@ import "TopologyModel.js" as Topology
 import "DisplayEventModel.js" as DisplayEvents
 import "StudioModel.js" as Studio
 import "SessionGuard.js" as SessionGuard
+import "TextEditing.js" as TextEditing
 
 Panel {
   id: root
@@ -127,12 +128,11 @@ Panel {
     root.workspaceAssignmentsActual, root.displayTransitioning, Topology)
 
   function copyHealthReport() {
-    if (healthCopyProc.running) return
+    if (healthCopyProc.busy) return
     root.healthCopyStatus = ""
-    healthCopyProc.command = ["wl-copy", "--type", "text/plain", "--",
+    healthCopyProc.launch(["wl-copy", "--type", "text/plain", "--",
       Studio.sanitizedReport(root.displays, root.profileMatch,
-        root.workspaceAssignmentsActual, root.displayTransitioning, Topology)]
-    healthCopyProc.running = true
+        root.workspaceAssignmentsActual, root.displayTransitioning, Topology)])
   }
 
   property string dismissedSetupGeneration: ""
@@ -146,7 +146,7 @@ Panel {
   readonly property var recommendedMirror: Studio.recommendedSetup(root.displays, "mirror", Topology)
   readonly property bool assistanceBusy: root.layoutApplying || root.layoutConfirmationPending
     || root.profileActionBusy || root.layoutDirty || root.layoutDragging || root.displayTransitioning
-    || restoreLayoutProc.running
+    || restoreLayoutProc.busy
 
   function applyRecommendedSetup(kind) {
     if (root.assistanceBusy) return
@@ -540,17 +540,16 @@ Panel {
       Qt.callLater(root.openExpandedLayout)
     }
     function revert(): string {
-      if (emergencyRevertProc.running) return "busy"
-      emergencyRevertProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-                                     "revert-pending"]
-      emergencyRevertProc.running = true
+      if (emergencyRevertProc.busy) return "busy"
+      emergencyRevertProc.launch(["bash", root.pluginScript("apply-layout.sh"),
+                                  "revert-pending"])
       return "reverting"
     }
   }
 
   function refresh(reason) {
     var intent = DisplayEvents.refreshIntent(reason)
-    if (stateProc.running) {
+    if (stateProc.busy) {
       if (intent.queueIfBusy) {
         root.stateRefreshQueued = true
         if (intent.bypassDebounce) {
@@ -573,7 +572,7 @@ Panel {
       applying: root.layoutApplying, pending: root.layoutConfirmationPending,
       profileBusy: root.profileActionBusy
     })
-    stateProc.running = true
+    stateProc.launch(["bash", root.pluginScript("state.sh")])
   }
 
   function showIdentifyOverlay() {
@@ -617,7 +616,7 @@ Panel {
     root.displayTransitioning = settled.state.transitioning
     if (settled.hardwareChanged && root.layoutConfirmationPending)
       root.cancelStaleDisplayPreview()
-    if (root.ownsDisplayIpc && !restoreLayoutProc.running
+    if (root.ownsDisplayIpc && !restoreLayoutProc.busy
         && root.observedRestoreGeneration !== snapshot.hardwareGeneration) {
       root.observedRestoreGeneration = snapshot.hardwareGeneration
       var permission = DisplayEvents.autoRestorePermission({
@@ -626,11 +625,10 @@ Panel {
         applying: root.layoutApplying, pending: root.layoutConfirmationPending,
         profileBusy: root.profileActionBusy
       })
-      restoreLayoutProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-        "auto-restore", snapshot.hardwareGeneration, permission]
       root.autoRestoreOwnsBusy = permission === "allow"
       if (root.autoRestoreOwnsBusy) root.layoutApplying = true
-      restoreLayoutProc.running = true
+      restoreLayoutProc.launch(["bash", root.pluginScript("apply-layout.sh"),
+        "auto-restore", snapshot.hardwareGeneration, permission])
     }
     root.burstRestoreBlocked = false
   }
@@ -645,9 +643,8 @@ Panel {
     root.layoutProcessAction = "cancel"
     root.layoutApplying = true
     root.layoutError = ""
-    layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-                               "cancel-stale", root.layoutTransactionId]
-    layoutApplyProc.running = true
+    layoutApplyProc.launch(["bash", root.pluginScript("apply-layout.sh"),
+                            "cancel-stale", root.layoutTransactionId])
   }
 
   function updateProfiles(raw) {
@@ -678,8 +675,7 @@ Panel {
                    "profile-action", action, profileId]
     if (value !== undefined && value !== null) command.push(String(value))
     root.profileActionBusy = true
-    profileActionProc.command = command
-    profileActionProc.running = true
+    profileActionProc.launch(command)
   }
 
   function requestProfileDelete(profileId) {
@@ -692,14 +688,13 @@ Panel {
     root.brightnessPercent = percent
     root.pendingBrightnessPercent = percent
 
-    if (setBrightnessProc.running) {
+    if (setBrightnessProc.busy) {
       root.brightnessSetQueued = true
       return
     }
 
     root.brightnessSetQueued = false
-    setBrightnessProc.command = ["omarchy-brightness-display", "--no-osd", "--monitor", root.focusedMonitor, percent + "%"]
-    setBrightnessProc.running = true
+    setBrightnessProc.launch(["omarchy-brightness-display", "--no-osd", "--monitor", root.focusedMonitor, percent + "%"])
   }
 
   function previewBrightness(value) {
@@ -970,14 +965,13 @@ Panel {
     root.layoutError = ""
     var workspaces = workspaceOverride === undefined
       ? root.workspacePayload() : workspaceOverride
-    layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-                               "preview", root.layoutTransactionId,
-                               JSON.stringify(proposed), JSON.stringify(previous),
-                               JSON.stringify(workspaces),
-                               root.layoutTransactionScope, anchor, String(preset || ""),
-                               root.confirmationScreenName,
-                               String(root.confirmationWorkspaceId)]
-    layoutApplyProc.running = true
+    layoutApplyProc.launch(["bash", root.pluginScript("apply-layout.sh"),
+                            "preview", root.layoutTransactionId,
+                            JSON.stringify(proposed), JSON.stringify(previous),
+                            JSON.stringify(workspaces),
+                            root.layoutTransactionScope, anchor, String(preset || ""),
+                            root.confirmationScreenName,
+                            String(root.confirmationWorkspaceId)])
   }
 
   function applyTopologyPreset(preset) {
@@ -1048,11 +1042,10 @@ Panel {
     }
     root.layoutApplying = true
     root.layoutError = ""
-    workspaceApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-                                  "save-workspaces", JSON.stringify(monitors),
-                                  JSON.stringify(root.stagedWorkspaceAssignments),
-                                  root.anchorDisplayName]
-    workspaceApplyProc.running = true
+    workspaceApplyProc.launch(["bash", root.pluginScript("apply-layout.sh"),
+                               "save-workspaces", JSON.stringify(monitors),
+                               JSON.stringify(root.stagedWorkspaceAssignments),
+                               root.anchorDisplayName])
   }
 
   function keepDisplayLayout(profileChoice, profileId) {
@@ -1070,11 +1063,10 @@ Panel {
     root.layoutProcessAction = "keep"
     root.layoutApplying = true
     root.layoutError = ""
-    layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-                               "keep", root.layoutTransactionId]
-    if (profileChoice && profileId)
-      layoutApplyProc.command.push(profileChoice, profileId)
-    layoutApplyProc.running = true
+    var keepCommand = ["bash", root.pluginScript("apply-layout.sh"),
+                       "keep", root.layoutTransactionId]
+    if (profileChoice && profileId) keepCommand.push(profileChoice, profileId)
+    layoutApplyProc.launch(keepCommand)
   }
 
   function revertDisplayLayout() {
@@ -1082,9 +1074,8 @@ Panel {
     root.layoutProcessAction = "revert"
     root.layoutApplying = true
     root.layoutError = ""
-    layoutApplyProc.command = ["bash", root.pluginScript("apply-layout.sh"),
-                               "revert", root.layoutTransactionId]
-    layoutApplyProc.running = true
+    layoutApplyProc.launch(["bash", root.pluginScript("apply-layout.sh"),
+                            "revert", root.layoutTransactionId])
   }
 
   function secondaryLayoutAction() {
@@ -1221,8 +1212,7 @@ Panel {
   }
 
   function setTextSize(px) {
-    textScaleProc.command = ["omarchy-display-text-size", String(px)]
-    if (!textScaleProc.running) textScaleProc.running = true
+    textScaleProc.launch(["omarchy-display-text-size", String(px)])
   }
 
   function adjustTextSize(deltaSteps) {
@@ -1240,7 +1230,7 @@ Panel {
   Component.onCompleted: {
     SessionGuard.setBlocked(root.sessionGuardId, root.blocksAutoRestore)
     root.refresh()
-    pendingTransactionProc.running = true
+    pendingTransactionProc.launch(["bash", root.pluginScript("apply-layout.sh"), "pending"])
     // A shell restart or plugin reload sees the same displays as before, so
     // the hotplug path does not run. Put the remembered layout back anyway in
     // case the displays were reset while the shell was away.
@@ -1336,12 +1326,12 @@ Panel {
     repeat: false
     onTriggered: {
       // Only wait out this panel's own apply or preview; retry shortly.
-      if (reloadRestoreProc.running || root.layoutApplying || root.layoutConfirmationPending) {
+      if (reloadRestoreProc.busy || root.layoutApplying || root.layoutConfirmationPending) {
         restart()
         return
       }
       root.reloadRestoreRunCount++
-      reloadRestoreProc.running = true
+      reloadRestoreProc.launch(["bash", root.pluginScript("apply-layout.sh"), "restore-after-reload"])
     }
   }
   property string instanceCreatedAt: new Date().toISOString()
@@ -1349,10 +1339,11 @@ Panel {
   property int reloadRestoreRunCount: 0
   property int reloadRestoreLastExit: -1
 
-  Process {
+  BoundedProcess {
     id: reloadRestoreProc
-    command: ["bash", root.pluginScript("apply-layout.sh"), "restore-after-reload"]
-    onExited: function(exitCode) {
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 90
+    onFinished: function(exitCode) {
       root.reloadRestoreLastExit = exitCode
       root.refresh("manual")
     }
@@ -1389,13 +1380,19 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  Process {
+  BoundedProcess {
     id: stateProc
-    command: ["bash", root.pluginScript("state.sh")]
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 20
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         var lines = String(text || "").split("\n")
+        // A refresh cut short by its deadline or output cap is ignored rather
+        // than read as "no displays": every line, the last one included, must
+        // have arrived whole.
+        if (lines.length < 13) return
+        try { JSON.parse(String(lines[12] || "")) } catch (e) { return }
         var brightness = String(lines[0] || "").trim()
         root.brightnessAvailable = brightness !== "unavailable" && brightness !== ""
         root.brightnessPercent = root.brightnessAvailable ? Math.max(0, Math.min(100, parseInt(brightness, 10))) : 0
@@ -1413,8 +1410,8 @@ Panel {
         root.updateProfiles(String(lines[12] || "{}").trim())
       }
     }
-    onRunningChanged: {
-      if (running || !root.stateRefreshQueued) return
+    onFinished: {
+      if (!root.stateRefreshQueued) return
       var queuedReason = root.stateRefreshQueuedReason || "poll"
       root.stateRefreshQueued = false
       root.stateRefreshQueuedReason = ""
@@ -1429,8 +1426,10 @@ Panel {
     onTriggered: root.setBrightness(root.brightnessPercent)
   }
 
-  Process {
+  BoundedProcess {
     id: setBrightnessProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 10
     stdout: StdioCollector { waitForEnd: true }
     // Do NOT call refresh() after a brightness set completes. The local
     // brightnessPercent we just wrote is authoritative; re-reading via
@@ -1439,24 +1438,19 @@ Panel {
     // visible as a "bounce to zero" after h/l keypresses. External
     // brightness changes are still picked up by the 5s periodic refresh,
     // the open-time refresh, and Component.onCompleted.
-    onRunningChanged: {
-      if (running) return
+    onFinished: {
       if (root.brightnessSetQueued) {
         root.setBrightness(root.pendingBrightnessPercent)
       }
     }
   }
 
-  Process {
-    id: actionProc
-    stdout: StdioCollector { waitForEnd: true }
-    onRunningChanged: if (!running) root.refresh()
-  }
-
-  Process {
+  BoundedProcess {
     id: emergencyRevertProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 60
     stderr: StdioCollector { id: emergencyRevertError; waitForEnd: true }
-    onExited: function(exitCode) {
+    onFinished: function(exitCode) {
       if (exitCode !== 0) {
         var message = Topology.explainBackendReport(emergencyRevertError.text)
         root.layoutError = message || "Emergency display revert failed"
@@ -1471,18 +1465,22 @@ Panel {
     }
   }
 
-  Process {
+  BoundedProcess {
     id: healthCopyProc
-    onExited: function(exitCode) {
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 10
+    onFinished: function(exitCode) {
       root.healthCopyStatus = exitCode === 0 ? "Sanitized report copied."
         : "Copy failed. Check that wl-copy and the Wayland clipboard are available."
     }
   }
 
-  Process {
+  BoundedProcess {
     id: restoreLayoutProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 60
     stderr: StdioCollector { id: restoreLayoutError; waitForEnd: true }
-    onExited: function(exitCode) {
+    onFinished: function(exitCode) {
       if (root.autoRestoreOwnsBusy) root.layoutApplying = false
       root.autoRestoreOwnsBusy = false
       if (exitCode !== 0) {
@@ -1493,9 +1491,10 @@ Panel {
     }
   }
 
-  Process {
+  BoundedProcess {
     id: pendingTransactionProc
-    command: ["bash", root.pluginScript("apply-layout.sh"), "pending"]
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 15
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -1505,10 +1504,12 @@ Panel {
     }
   }
 
-  Process {
+  BoundedProcess {
     id: layoutApplyProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 60
     stderr: StdioCollector { id: layoutApplyError; waitForEnd: true }
-    onExited: function(exitCode) {
+    onFinished: function(exitCode) {
       var completedAction = root.layoutProcessAction
       root.layoutApplying = false
       if (exitCode === 0) {
@@ -1571,10 +1572,12 @@ Panel {
     }
   }
 
-  Process {
+  BoundedProcess {
     id: workspaceApplyProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 30
     stderr: StdioCollector { id: workspaceApplyError; waitForEnd: true }
-    onExited: function(exitCode) {
+    onFinished: function(exitCode) {
       root.layoutApplying = false
       if (exitCode === 0) {
         root.workspaceAssignmentsManaged = Object.keys(root.stagedWorkspaceAssignments).length > 0
@@ -1589,10 +1592,12 @@ Panel {
     }
   }
 
-  Process {
+  BoundedProcess {
     id: profileActionProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 30
     stderr: StdioCollector { id: profileActionError; waitForEnd: true }
-    onExited: function(exitCode) {
+    onFinished: function(exitCode) {
       root.profileActionBusy = false
       if (exitCode !== 0) {
         var message = String(profileActionError.text || "").trim()
@@ -1619,8 +1624,10 @@ Panel {
   // Applies text size via the CLI, which rewrites the shell override file;
   // Style picks the new base-size up through its own file watch, so there's
   // nothing to refresh here.
-  Process {
+  BoundedProcess {
     id: textScaleProc
+    runner: root.pluginScript("bounded.sh")
+    deadlineSeconds: 10
     stdout: StdioCollector { waitForEnd: true }
   }
 
@@ -1813,7 +1820,7 @@ Panel {
               iconText: "󰑐"
               tooltipText: "Re-read connected displays and their modes"
               bordered: true
-              enabled: !stateProc.running
+              enabled: !stateProc.busy
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
               fontSize: Style.font.caption
@@ -2495,11 +2502,31 @@ Panel {
                     spacing: Style.spacing.xs
 
                     TextField {
+                      id: profileNameField
                       width: parent.width - profileActions.implicitWidth - parent.spacing
                       text: String(modelData.name || "")
                       enabled: !root.profileActionBusy
                       foreground: root.bar.foreground
-                      onAccepted: if (text !== modelData.name) root.runProfileAction("rename", modelData.id, text)
+                      maximumLength: 64
+                      // Read-only to Qt so it never reads the clipboard on its
+                      // own; typed into by TextEditing.key. A profile name is
+                      // short, so paste is not offered at all.
+                      readOnly: true
+                      cursorVisible: activeFocus
+                      ContextMenu.menu: null
+                      Keys.onPressed: function(event) {
+                        event.accepted = TextEditing.key(profileNameField, event, {
+                          paste: function() {},
+                          enter: function() {
+                            if (profileNameField.text !== modelData.name)
+                              root.runProfileAction("rename", modelData.id, profileNameField.text)
+                            return true
+                          }
+                        }, { paste: StandardKey.Paste, selectAll: StandardKey.SelectAll, cut: StandardKey.Cut })
+                      }
+                      TapHandler { onTapped: profileNameField.forceActiveFocus() }
+                      // Middle-click would paste the primary selection.
+                      MouseArea { anchors.fill: parent; acceptedButtons: Qt.MiddleButton }
                     }
 
                     Row {
@@ -2886,7 +2913,7 @@ Panel {
                   text: "Copy report"
                   tooltipText: "Copies a report without display names, serials, profile names or paths"
                   bordered: true
-                  enabled: !healthCopyProc.running
+                  enabled: !healthCopyProc.busy
                   foreground: root.bar.foreground
                   fontFamily: root.bar.fontFamily
                   fontSize: Style.font.caption

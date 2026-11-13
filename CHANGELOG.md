@@ -2,6 +2,23 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.3] - 2026-11-13
+
+### Fixed
+
+- The profile name field no longer reads the clipboard on its own. An editable
+  Qt text field fetches the whole clipboard every time it changes, with no size
+  or time limit, inside the shared shell; a misbehaving clipboard owner could
+  stall it. The field is now typed into by the plugin itself, and paste is not
+  offered there.
+- Every helper the panel runs has an overall deadline, capped output, and ends
+  everything it started when it stops. A helper that fails to start can no
+  longer leave the panel stuck as busy.
+- A preview that failed half-way (for example, when the mirrored part of a
+  layout was rejected after the rest had been applied) is now put back to the
+  previous layout instead of being left half-applied. The rollback watchdog
+  starts before anything is applied.
+
 ## [1.1.2] - 2026-11-11
 
 ### Fixed

@@ -84,7 +84,9 @@ labels out of those tooltips and uses trusted static workspace guidance there.
 
 1. **Apply** validates proposed and previous states, creates a private runtime
    transaction, and changes only the live monitor layout.
-2. A detached watchdog waits 15 seconds.
+2. A detached watchdog, started before anything is applied and with its own
+   deadline, waits the 15-second confirmation plus 5 seconds. It reverts only
+   a transaction that is still pending.
 3. **Keep** claims the transaction, atomically saves the confirmed topology
    into the versioned profile store (schema v2), repairs any compositor drift
    through the runtime monitor transaction, reapplies workspace state, and
@@ -133,7 +135,17 @@ kept and updates nothing. Discovery and Refresh never write profile state.
 ## Failure and recovery
 
 - Invalid input exits before running `hyprctl` or writing persistent state.
-- A failed preview remains uncommitted and reports an error in the panel.
+- A failed preview remains uncommitted and reports an error in the panel. If
+  part of it was already applied (ordinary outputs and mirrored ones are
+  separate compositor transactions), the previous layout is put back first.
+- Every helper the panel starts runs through `bounded.sh` with an overall
+  deadline, capped stdout and stderr, and its whole process group ended with
+  it; programs inside them (`hyprctl`, `edid-decode`, the brightness tool)
+  have their own deadlines too. `BoundedProcess.qml` reports exactly one
+  result per helper, also when the program never starts, so busy state always
+  clears. Waits for the shared restore lock are finite (30 seconds).
+- The profile-name field is read-only to Qt and typed into by
+  `TextEditing.js`, so it never reads the clipboard; paste is not offered.
 - A failed Keep leaves its transaction available rather than silently claiming
   success.
 - A hot-plug during confirmation cannot be kept accidentally; the stable

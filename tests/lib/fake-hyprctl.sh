@@ -29,6 +29,11 @@ if [[ $1 == eval ]]; then
     echo "bandwidth or resource limit" >&2
     exit 1
   fi
+  # Fail only the transaction that contains this text (e.g. 'mirror = "eDP-1"').
+  if [[ -n ${HYPRCTL_FAIL_EVAL_MATCH:-} && $2 == *"$HYPRCTL_FAIL_EVAL_MATCH"* ]]; then
+    echo "rejected" >&2
+    exit 1
+  fi
   if [[ ${HYPRCTL_IGNORE_EVAL:-0} == 1 ]]; then exit 0; fi
   before_state=$(mktemp)
   cp "$HYPRCTL_MONITORS" "$before_state"

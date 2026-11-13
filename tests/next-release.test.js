@@ -33,7 +33,8 @@ console.log('next release integration tests passed');
 // Qt engine or display changes. This catches control-flow errors beyond wiring.
 const handler = qml.match(/^  function handleMonitorSnapshot\(raw\) \{[\s\S]*?^  \}/m)[0];
 function harness(overrides={}) {
-  const proc = {running:false, command:[]};
+  const proc = {running:false, busy:false, command:[],
+    launch(command){this.command=command;this.running=true;this.busy=true;return true}};
   const root = Object.assign({healthSnapshot:{},displayEventState:events.initialState('a'),
     displayTransitioning:false,stateProcHotplugScan:true,scanEventAt:1000,
     scanRestorePermission:'allow',ownsDisplayIpc:true,observedRestoreGeneration:'a',
@@ -51,7 +52,7 @@ function harness(overrides={}) {
 let h=harness();h.run('b');assert.equal(h.proc.running,false);assert.equal(h.root.displayTransitioning,true);
 h=harness({displayEventState:events.noteHardwareEvent(events.initialState('a'),1000)});
 h.run('b');assert.equal(h.proc.command[2],'auto-restore');assert.equal(h.proc.command[4],'allow');
-h.proc.running=false;h.run('b');assert.equal(h.proc.running,false);
+h.proc.running=false;h.proc.busy=false;h.run('b');assert.equal(h.proc.running,false);
 h=harness({displayEventState:events.noteHardwareEvent(events.initialState('a'),1000),layoutDirty:true});
 h.run('b');assert.equal(h.proc.command[4],'block');assert.equal(h.root.layoutApplying,false);
 h=harness({displayEventState:events.noteHardwareEvent(events.initialState('a'),2500)});

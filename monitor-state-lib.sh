@@ -34,7 +34,7 @@ preferred_resolution_for() {
       fi
     fi
 
-    output=$(LC_ALL=C "$decoder" -s --skip-sha -n "$connector/edid" 2>/dev/null) || continue
+    output=$(LC_ALL=C timeout -k 1 5 "$decoder" -s --skip-sha -n "$connector/edid" 2>/dev/null) || continue
     resolution=$(awk '/^Native Video Resolution:$/ { getline; print $1; exit }' <<<"$output")
     # A DTD the firmware explicitly marks preferred outranks the summary's
     # positional "Native Video Resolution" (see edid_preferred_dtds).

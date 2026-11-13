@@ -47,7 +47,7 @@ rg -q 'function recoverDisplayConfirmation' Panel.qml
 rg -q 'Qt\.callLater\(root\.refitDisplayLayout\)' Panel.qml
 rg -Fq 'function revert(): string' Panel.qml
 rg -q '"revert-pending"' Panel.qml
-rg -q 'pendingTransactionProc\.running = true' Panel.qml
+rg -q 'pendingTransactionProc\.launch\(' Panel.qml
 rg -q 'function ownsDisplayIpc' Model.js
 rg -q 'enabled: root\.ownsDisplayIpc' Panel.qml
 rg -q 'omarchy shell omarchy.monitor revert' README.md

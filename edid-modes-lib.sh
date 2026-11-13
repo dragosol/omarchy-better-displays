@@ -56,9 +56,9 @@ edid_cached_info() {
     return 0
   fi
   local full preferred
-  full=$(LC_ALL=C "$decoder" "$edid_file" 2>/dev/null) || full=""
+  full=$(LC_ALL=C timeout -k 1 5 "$decoder" "$edid_file" 2>/dev/null) || full=""
   preferred=$(printf '%s\n' "$full" | edid_preferred_dtds)
-  info=$(LC_ALL=C "$decoder" -X "$edid_file" 2>/dev/null | edid_modes_from_xmodelines "$preferred") || info=""
+  info=$(LC_ALL=C timeout -k 1 5 "$decoder" -X "$edid_file" 2>/dev/null | edid_modes_from_xmodelines "$preferred") || info=""
   [[ -n $info ]] || { edid_empty_info; return 0; }
   if [[ -n $hash ]]; then
     ( umask 077; mkdir -p "$cache_root" \

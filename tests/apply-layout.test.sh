@@ -26,7 +26,7 @@ run_layout() {
   HYPRCTL_LOG="$test_root/hyprctl.log" \
   HYPRCTL_MONITORS="$test_root/monitors.json" \
   MONITOR_SYSFS_ROOT="$test_root/empty-sysfs" \
-  LAYOUT_WATCHDOG_DISABLED=1 \
+  LAYOUT_WATCHDOG_DISABLED=${LAYOUT_WATCHDOG_DISABLED:-1} \
   LAYOUT_SETTLE_ATTEMPTS=4 \
     bash "$script" "$@"
 }
@@ -529,5 +529,56 @@ jq -e '.[] | select(.name == "SIDECAR-iPad-x1") | .x == -1366 and .y == 56' "$te
 headless_bad=$(jq -c 'map(if .name == "SIDECAR-iPad-x1" then .width = 1024 | .height = 768 else . end)' <<<"$headless_left")
 ! run_layout preview headless-bad "$headless_bad" "$headless_left" '{}' 2>/dev/null
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
+
+# Ordinary outputs and mirrored ones are separate compositor transactions. When
+# the first is applied and the mirror one is rejected, the preview fails and
+# the previous layout is put back rather than left half-applied.
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+live='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0},{"name":"eDP-1","x":1920,"y":0,"width":2880,"height":1800,"refreshRate":60,"scale":2,"transform":0}]'
+half='[{"name":"DP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":1},{"name":"eDP-1","x":0,"y":0,"width":1920,"height":1080,"refreshRate":59.95,"scale":1,"transform":0,"mirrorOf":"DP-1"}]'
+: >"$test_root/hyprctl.log"
+if HYPRCTL_FAIL_EVAL_MATCH='mirror = "DP-1"' run_layout preview half-mirror "$half" "$live" '{}' 2>/dev/null; then
+  echo "a rejected mirror transaction was accepted" >&2
+  exit 1
+fi
+grep -Fq 'transform = 1' "$test_root/hyprctl.log"
+jq -e '.[] | select(.name == "DP-1") | .transform == 0 and .x == 0 and .y == 0' "$test_root/monitors.json" >/dev/null
+jq -e '.[] | select(.name == "eDP-1") | .x == 1920 and .disabled == false' "$test_root/monitors.json" >/dev/null
+test ! -e "$test_root/runtime/omarchy-displays/half-mirror"
+test "$(run_layout pending)" = '{}'
+
+# A failure before anything was applied issues no extra modeset.
+: >"$test_root/hyprctl.log"
+! HYPRCTL_FAIL_EVAL=1 run_layout preview nothing-applied "$proposed" "$live" '{}' 2>/dev/null
+test "$(grep -c '^eval' "$test_root/hyprctl.log")" = 1
+
+# The rollback watchdog is started before the preview applies anything, so a
+# preview that hangs or dies part-way is still reverted.
+cat >"$test_root/bin/setsid" <<'FAKE'
+#!/bin/bash
+printf 'setsid %s\n' "$*" >>"$HYPRCTL_LOG"
+FAKE
+chmod +x "$test_root/bin/setsid"
+: >"$test_root/hyprctl.log"
+LAYOUT_WATCHDOG_DISABLED=0 run_layout preview watched "$proposed" "$live" '{}'
+head -1 "$test_root/hyprctl.log" | grep -Eq '^setsid -f timeout -k 5 [0-9]+ bash .*apply-layout.sh watchdog watched [0-9]+$'
+grep -n '' "$test_root/hyprctl.log" | grep -m1 ':eval' | grep -vq '^1:'
+rm -f "$test_root/bin/setsid"
+run_layout revert watched
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+
+# Waiting for the shared lock is finite: a stuck holder fails the waiter.
+( flock -x 9; sleep 4 ) 9>"$test_root/runtime/omarchy-displays/restore.lock" &
+holder=$!
+sleep 0.3
+started=$(date +%s)
+set +e
+LAYOUT_LOCK_WAIT=1 run_layout preview locked "$proposed" "$live" '{}' 2>/dev/null
+lock_status=$?
+set -e
+test "$lock_status" = 75
+test $(( $(date +%s) - started )) -le 3
+kill "$holder" 2>/dev/null || true
+wait "$holder" 2>/dev/null || true
 
 echo "apply layout transaction tests passed"
