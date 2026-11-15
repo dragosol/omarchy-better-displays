@@ -17,7 +17,7 @@ PanelWindow {
 
   signal closeRequested()
 
-  visible: controller.expandedLayoutOpen
+  visible: controller.expandedLayoutOpen && !controller.layoutConfirmationPending
   screen: targetScreen
   color: "transparent"
   exclusionMode: ExclusionMode.Ignore

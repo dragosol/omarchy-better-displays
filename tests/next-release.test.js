@@ -64,3 +64,32 @@ assert.equal(h.root.burstRestoreBlocked,true, 'read-only initial refresh must no
 h=harness({burstRestoreBlocked:true});h.run('a');
 assert.equal(h.root.burstRestoreBlocked,false, 'unchanged settled generation clears the burst latch');
 console.log('QML snapshot control-flow tests passed');
+
+// Execute reload recovery's real timer body. A secondary bar or an editor on
+// another display must never start automatic monitor changes.
+const reloadTimer = qml.match(/id: configReloadRestoreTimer[\s\S]*?onTriggered: \{([\s\S]*?)^    \}/m)[1];
+function reloadRecovery(overrides = {}, blocked = false) {
+  const root = Object.assign({ownsDisplayIpc:true,layoutDirty:false,
+    layoutDragging:false,arrangementEditing:false,expandedLayoutOpen:false,
+    layoutApplying:false,layoutConfirmationPending:false,profileActionBusy:false,
+    displayTransitioning:false,reloadRestoreRunCount:0,
+    pluginScript:(name) => name}, overrides);
+  const proc = {busy:false, launched:false, launch(command) {
+    this.launched = true;
+    this.command = command;
+  }};
+  vm.runInNewContext('(function(){' + reloadTimer + '})()', {
+    root, reloadRestoreProc:proc, DisplayEvents:events,
+    SessionGuard:{anyBlocked:()=>blocked}
+  });
+  return {root,proc};
+}
+assert.equal(reloadRecovery().proc.launched,true);
+assert.equal(reloadRecovery().root.layoutApplying,true);
+assert.equal(reloadRecovery({ownsDisplayIpc:false}).proc.launched,false);
+assert.equal(reloadRecovery({},true).proc.launched,false);
+for (const key of ['layoutDirty','layoutDragging','arrangementEditing',
+  'expandedLayoutOpen','layoutApplying','layoutConfirmationPending',
+  'profileActionBusy','displayTransitioning'])
+  assert.equal(reloadRecovery({[key]:true}).proc.launched,false,key);
+console.log('single-owner reload recovery tests passed');
