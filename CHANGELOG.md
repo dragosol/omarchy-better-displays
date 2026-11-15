@@ -2,6 +2,22 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Automatic restore no longer invents a layout for a new or partial monitor
+  combination. Only an exact saved profile, or the same monitors on different
+  ports, is applied. Anything else stays as it is until you preview and keep it.
+- A saved mode the output can no longer do is left alone. Reload recovery tries
+  once, shares the hotplug generation fence, and does not retry a rejected plan.
+- Automatic modesets are limited to one attempt every 15 seconds, and a failed
+  apply is not rolled back onto a monitor that replaced the previous one.
+- Only the bar instance that owns display IPC requests reload recovery, and it
+  waits while a layout is being edited or confirmed.
+- The Keep/Revert countdown closes the panel and the fullscreen arranger so
+  they do not cover it.
+
 ## [1.1.3] - 2026-11-13
 
 ### Fixed

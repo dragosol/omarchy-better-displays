@@ -125,27 +125,25 @@ the way you last set them, with nothing to confirm:
   workspaces included.
 - **The same monitors on different ports** (another USB-C port or dock): the
   layout follows the monitors, and the new port combination is remembered too.
-- **A new combination** (your ultrawide at a desk it has never been at, or with
-  a different second screen): each monitor it recognises gets the resolution,
-  refresh rate, scale and rotation you last kept for it, placed where it last
-  sat relative to a display that is also connected, or to the right. Monitors
-  it has never seen keep Hyprland's defaults. The result is saved as a profile
-  for that combination.
-
-The same happens after anything that resets monitors without unplugging them:
-a Hyprland config reload (saving a file in `~/.config/hypr`, changing the
-Omarchy theme) or a shell restart. Those restores are silent.
-
-A short notification says what was restored; click it to **undo**. Undo puts
-the previous layout back and forgets any profile the restore created. When
-several profiles match, the one you selected or changed most recently wins.
+- **A new or partially matched combination:** keep the current display settings.
+  Select or create a profile in the panel and confirm it with **Keep**. Individual
+  monitors are never combined into an automatically applied, guessed profile.
+- **A saved mode no longer available:** leave the current layout alone. Edit and
+  confirm the profile for the new connection rather than repeatedly forcing it.
 
 Monitors are recognised by their serial number or EDID, never by make and
 model alone, so identical monitors without serials are not guessed at: they are
 told apart by the port they are plugged into, and their layout comes back only
 while each one is on the port it was kept on.
-Restoring waits for the connection to settle, runs once per connected set, and
-never interrupts a change you are making in the panel.
+Automatic restore waits for stable hardware, tries each observed connected set
+once, and allows at most one modeset attempt per 15 seconds. Reloads and shell
+restarts do not reset that guard. A failed or skipped restore stays skipped
+until another hardware change; manual previews remain available. Only one bar
+instance requests reload recovery, and editing on any display blocks it.
+
+A short notification offers **Undo** after a successful automatic restore.
+When several fully matched profiles exist, the active profile wins, then the
+most recently updated one. Saved profiles and manual preview/Keep stay available.
 
 The schema-v2 store keeps identity evidence, modes, arrangement, workspaces,
 anchor and preset variants for each connected set:

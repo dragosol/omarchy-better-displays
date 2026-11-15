@@ -18,7 +18,12 @@ live_x() { jq -r --arg name "${1:-DP-1}" '.[] | select(.name == $name) | .x' "$H
 generation() {
   bash -c 'source "$1/monitor-snapshot-lib.sh"; monitor_snapshot' _ "$(dirname "$script")" | jq -r .hardwareGeneration
 }
-observe() { bash "$script" auto-restore "$(generation)" "${1:-allow}"; }
+# Most cases model deliberate reconnects separated in time. Storm tests below
+# call the backend directly to retain its real shared cooldown.
+observe() {
+  rm -f "$XDG_RUNTIME_DIR/omarchy-displays/auto-last-attempt"
+  bash "$script" auto-restore "$(generation)" "${1:-allow}"
+}
 last_undo_id() { grep -o 'auto-[0-9]*' "$NOTIFY_LOG" | tail -n 1; }
 
 printf '%s' '[{"name":"DP-1","serial":"unique","make":"Test","model":"A","width":1920,"height":1080,"refreshRate":60,"x":0,"y":0,"scale":1,"availableModes":["1920x1080@60Hz"]}]' > "$HYPRCTL_MONITORS"
@@ -124,16 +129,58 @@ cmp "$HYPRCTL_LOG" "$root/before-race-log"
 mv "$root/bin/hyprctl-real" "$root/bin/hyprctl"
 cp "$root/drifted-monitors" "$HYPRCTL_MONITORS"
 
-# A Hyprland config reload resets outputs without a hardware change. Restoring
-# after it re-arms the fence for the current set and does not notify.
+# Reload recovery must not re-arm a consumed generation, even when the live
+# topology disagrees. Repeated per-screen requests cannot cause modeset loops.
 jq '.[0].x=100' "$root/drifted-monitors" > "$HYPRCTL_MONITORS"
 observe
 jq '.[0].x=250' "$root/drifted-monitors" > "$HYPRCTL_MONITORS"
 notifications_before=$(wc -l < "$NOTIFY_LOG")
-bash "$script" restore-after-reload
-test "$(live_x)" = 0
+cp "$HYPRCTL_LOG" "$root/before-reloads"
+for attempt in 1 2 3 4; do bash "$script" restore-after-reload; done
+test "$(live_x)" = 250
+cmp "$HYPRCTL_LOG" "$root/before-reloads"
 test "$(wc -l < "$NOTIFY_LOG")" = "$notifications_before"
 cp "$root/drifted-monitors" "$HYPRCTL_MONITORS"
+
+
+# A new combination containing a familiar monitor must keep its live layout:
+# no inferred profile, modeset, workspace move, or profile-store mutation.
+printf '[]' > "$HYPRCTL_MONITORS"; observe
+jq '. + [{name:"HDMI-A-1",serial:"new-capture",make:"Elgato",model:"Capture",width:1920,height:1080,refreshRate:60,x:2200,y:0,scale:1,availableModes:["1920x1080@60Hz"]}]' \
+  "$root/drifted-monitors" > "$HYPRCTL_MONITORS"
+cp "$HYPRCTL_LOG" "$root/before-unknown"
+cp "$store" "$root/before-unknown-store"
+observe
+cmp "$HYPRCTL_LOG" "$root/before-unknown"
+cmp "$store" "$root/before-unknown-store"
+test "$(live_x)" = 100
+
+# Failed modesets are attempted once. Reloads never retry the rejected plan.
+printf '[]' > "$HYPRCTL_MONITORS"; observe
+cp "$root/drifted-monitors" "$HYPRCTL_MONITORS"
+rm -f "$XDG_RUNTIME_DIR/omarchy-displays/auto-last-attempt"
+if HYPRCTL_FAIL_EVAL=1 bash "$script" auto-restore "$(generation)" allow; then
+  echo 'rejected modeset reported success' >&2; exit 1
+fi
+cp "$HYPRCTL_LOG" "$root/after-rejection"
+bash "$script" restore-after-reload
+observe
+cmp "$HYPRCTL_LOG" "$root/after-rejection"
+
+# Driver-generated A/B/A bursts cannot immediately trigger another modeset.
+printf '[]' > "$HYPRCTL_MONITORS"; observe
+cp "$root/drifted-monitors" "$HYPRCTL_MONITORS"; observe
+cp "$HYPRCTL_LOG" "$root/after-first-restore"
+printf '[]' > "$HYPRCTL_MONITORS"
+bash "$script" auto-restore "$(generation)" allow
+cp "$root/drifted-monitors" "$HYPRCTL_MONITORS"
+bash "$script" auto-restore "$(generation)" allow
+cmp "$HYPRCTL_LOG" "$root/after-first-restore"
+test "$(live_x)" = 100
+# The skipped generation is consumed rather than retried after the cooldown.
+rm -f "$XDG_RUNTIME_DIR/omarchy-displays/auto-last-attempt"
+bash "$script" restore-after-reload
+cmp "$HYPRCTL_LOG" "$root/after-first-restore"
 
 # Manual preview and automatic restore share the snapshot/apply lock.
 set +e

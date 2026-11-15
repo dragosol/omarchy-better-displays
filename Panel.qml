@@ -50,6 +50,13 @@ Panel {
   property bool layoutDragging: false
   property bool layoutApplying: false
   property bool layoutConfirmationPending: false
+  onLayoutConfirmationPendingChanged: {
+    if (root.layoutConfirmationPending) {
+      // Release the editor's exclusive input before mapping the confirmation.
+      root.expandedLayoutOpen = false
+      root.close()
+    }
+  }
   property int layoutConfirmationSeconds: 0
   property string layoutTransactionId: ""
   property string layoutProcessAction: ""
@@ -1282,8 +1289,8 @@ Panel {
   // Saving anything under ~/.config/hypr, or changing the Omarchy theme,
   // reloads Hyprland, which resets every monitor to monitors.lua without any
   // hardware change. Put the remembered layout back once the reload settles.
-  // The backend refuses while a preview is pending and is idempotent, so every
-  // per-screen instance may ask; the restore lock serialises them.
+  // Only the IPC owner may request recovery. Reloads share the hotplug fence
+  // so a mismatched profile cannot repeatedly force a display modeset.
   Connections {
     target: Hyprland
     function onRawEvent(event) {
@@ -1325,11 +1332,17 @@ Panel {
     interval: 2000
     repeat: false
     onTriggered: {
-      // Only wait out this panel's own apply or preview; retry shortly.
-      if (reloadRestoreProc.busy || root.layoutApplying || root.layoutConfirmationPending) {
-        restart()
-        return
-      }
+      // Only the IPC owner may request recovery, and not while this panel is
+      // editing or confirming. Do not retry: a rejected plan must not modeset again.
+      if (!root.ownsDisplayIpc || reloadRestoreProc.busy
+          || DisplayEvents.autoRestorePermission({
+            dirty: root.layoutDirty || SessionGuard.anyBlocked(),
+            dragging: root.layoutDragging,
+            editing: root.arrangementEditing || root.expandedLayoutOpen,
+            applying: root.layoutApplying, pending: root.layoutConfirmationPending,
+            profileBusy: root.profileActionBusy, transitioning: root.displayTransitioning
+          }) !== "allow") return
+      root.layoutApplying = true
       root.reloadRestoreRunCount++
       reloadRestoreProc.launch(["bash", root.pluginScript("apply-layout.sh"), "restore-after-reload"])
     }
@@ -1344,6 +1357,7 @@ Panel {
     runner: root.pluginScript("bounded.sh")
     deadlineSeconds: 90
     onFinished: function(exitCode) {
+      root.layoutApplying = false
       root.reloadRestoreLastExit = exitCode
       root.refresh("manual")
     }
@@ -1522,9 +1536,6 @@ Panel {
           root.refresh()
           if (root.staleCancellationRequested)
             Qt.callLater(root.cancelStaleDisplayPreview)
-          // The compact confirmation overlay is independent of the bar icon,
-          // so close the full menu before per-screen bars are recreated.
-          if (root.opened) Qt.callLater(root.close)
         } else {
           root.stagedDisplaySettings = ({})
           root.displaySettingsBeforePreview = ({})
@@ -1703,7 +1714,7 @@ Panel {
     anchorItem: button
     owner: root
     bar: root.bar
-    open: root.opened
+    open: root.opened && !root.layoutConfirmationPending
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(1200), root.panelWidthCap)
     contentHeight: panel.fittedContentHeight(Style.space(600), root.panelHeightCap)

@@ -22,6 +22,7 @@ bash -n apply-layout.sh monitor-state-lib.sh monitor-snapshot-lib.sh profile-sto
 bash tests/auto-restore.test.sh
 node tests/studio-model.test.js
 node tests/next-release.test.js
+node tests/confirmation-input.test.js
 bash tests/apply-layout.test.sh
 bash tests/monitor-state.test.sh
 bash tests/monitor-snapshot.test.sh

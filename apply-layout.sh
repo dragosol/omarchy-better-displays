@@ -655,8 +655,8 @@ sync_hyprland_rules_from_live() {
 # Automatic restoration puts displays back the way they were last kept, and
 # keeps the result: a layout that was already confirmed once does not need a
 # second confirmation every time it is plugged in. MemoryPlanner.js decides
-# what to restore (an exact profile, a profile whose monitors moved connectors,
-# or remembered per-monitor settings for a new combination). A notification
+# what to restore: an exact profile, or the same monitors moved to other
+# connectors. A new or partial combination is left alone. A notification
 # offers one-click Undo, which reverts the live layout and forgets any profile
 # the restore created.
 #
@@ -666,7 +666,7 @@ sync_hyprland_rules_from_live() {
 auto_restore_layout() {
   local expected="$1" permission="$2"
   local snapshot generation store plan source monitors workspaces anchor previous
-  local id undo_dir fresh confirmed before_active after_active created_profile title body
+  local id undo_dir fresh confirmed before_active after_active created_profile title body now last_attempt
   snapshot=$(monitor_snapshot) || return 2
   generation=$(jq -r .hardwareGeneration <<<"$snapshot")
   [[ $generation == "$expected" ]] || return 0
@@ -680,7 +680,9 @@ auto_restore_layout() {
   store=$(<"$(profile_store_file)")
   plan=$(node "$script_dir/MemoryPlanner.js" "$store" "$snapshot" 2>/dev/null) || return 2
   source=$(jq -r '.source // "none"' <<<"$plan")
-  [[ $source =~ ^(exact|moved|per-monitor)$ ]] || return 0
+  # Unknown combinations require an explicit preview/Keep; never guess from
+  # individual monitors or automatically save a newly invented layout.
+  [[ $source =~ ^(exact|moved)$ ]] || return 0
   monitors=$(jq -c .monitors <<<"$plan")
   workspaces=$(jq -c '.workspaces // {}' <<<"$plan")
   anchor=$(jq -r '.anchor // ""' <<<"$plan")
@@ -696,18 +698,33 @@ auto_restore_layout() {
     | {name:$t.name,x:$t.x,y:$t.y,width:($m.w|tonumber),height:($m.h|tonumber),refreshRate:($m.r|tonumber),scale:$t.scale,transform:$t.transform}
       + (if $t.mirrorOf then {mirrorOf:$t.mirrorOf} else {} end) end]' <<<"$snapshot") || return 2
 
+  # A modeset can generate its own disconnect/reconnect burst. Skip another
+  # automatic modeset while the previous attempt settles.
+  now=$(date +%s)
+  last_attempt=0
+  [[ ! -f $runtime_root/auto-last-attempt ]] || last_attempt=$(<"$runtime_root/auto-last-attempt")
+  [[ $last_attempt =~ ^[0-9]+$ ]] || last_attempt=0
+  (( now - last_attempt >= 15 )) || return 0
+
   # Identity can change between matching and applying (a dock re-enumerating).
-  # Never apply a plan made for a different set of displays.
+  # Require a second stable snapshot; never apply a stale plan.
+  sleep 1
   fresh=$(monitor_snapshot) || return 2
   [[ $(jq -r .hardwareGeneration <<<"$fresh") == "$generation" ]] || return 1
 
+  printf '%s\n' "$now" >"$runtime_root/auto-last-attempt"
   if ! apply_payload_settled "$monitors"; then
-    apply_payload_settled "$previous" >/dev/null 2>&1 || true
+    fresh=$(monitor_snapshot) || return 2
+    # A replacement on the same port must not receive the old monitor's mode.
+    if [[ $(jq -r .hardwareGeneration <<<"$fresh") == "$generation" ]]; then
+      apply_payload_settled "$previous" >/dev/null 2>&1 || true
+    fi
     return 1
   fi
-  apply_workspace_payload "$workspaces"
 
   fresh=$(monitor_snapshot) || return 2
+  [[ $(jq -r .hardwareGeneration <<<"$fresh") == "$generation" ]] || return 1
+  apply_workspace_payload "$workspaces"
   confirmed=$(reconcile_actual "$monitors" "$fresh" "$previous")
   if jq -e '[.reasons[] | select(.code == "output-lost" or .code == "output-disabled")] | length > 0' \
       <<<"$confirmed" >/dev/null; then
@@ -744,19 +761,6 @@ auto_restore_layout() {
   esac
   omarchy notification send -u low -t 8000 "$title" "$body" \
     --exec bash "$script_path" restore-undo "$id" >/dev/null 2>&1 || true
-}
-
-# Success when the live displays already match what automatic restore would
-# apply, or when there is nothing remembered to apply.
-remembered_layout_holds() {
-  local snapshot store plan
-  has_active_transaction && return 0
-  profile_store_load || return 0
-  snapshot=$(monitor_snapshot) || return 1
-  store=$(<"$(profile_store_file)")
-  plan=$(node "$script_dir/MemoryPlanner.js" "$store" "$snapshot" 2>/dev/null) || return 1
-  [[ $(jq -r '.source // "none"' <<<"$plan") =~ ^(exact|moved|per-monitor)$ ]] || return 0
-  topology_matches_snapshot "$(jq -c .monitors <<<"$plan")" "$snapshot"
 }
 
 # Undo for an automatic restore: put back the layout that was live before it,
@@ -1221,29 +1225,17 @@ case "$command" in
     ;;
   restore-after-reload)
     (( $# == 1 )) || exit 2
-    # A config reload or shell restart changes no hardware, so the generation
-    # fence would skip it. Hyprland applies reloaded monitor rules over the
-    # next frames and can overwrite a restore made too early, so re-check the
-    # settled result and restore again until it holds.
-    ( take_lock
-      attempts=${RELOAD_RESTORE_ATTEMPTS:-4}
-      settle=${RELOAD_RESTORE_SETTLE:-1.5}
-      for ((attempt = 1; attempt <= attempts; attempt++)); do
-        rm -f -- "$runtime_root/auto-generation"
-        AUTO_RESTORE_QUIET=1 auto_restore_layout \
-          "$(monitor_snapshot | jq -r .hardwareGeneration)" allow || true
-        sleep "$settle"
-        if remembered_layout_holds; then
-          sync_hyprland_rules_from_live
-          break
-        fi
-      done
+    # Reloads and hotplug share one generation fence. Never re-arm it merely
+    # because a saved mode disagrees with the compositor or our rules reload.
+    ( flock -n -x 9 || exit 0
+      AUTO_RESTORE_QUIET=1 auto_restore_layout \
+        "$(monitor_snapshot | jq -r .hardwareGeneration)" allow
     ) 9>"$runtime_root/restore.lock"
     ;;
   auto-restore)
     (( $# == 3 )) || exit 2
     [[ $2 =~ ^[a-f0-9]{64}$ && $3 =~ ^(allow|block)$ ]] || exit 2
-    ( take_lock; auto_restore_layout "$2" "$3" ) 9>"$runtime_root/restore.lock"
+    ( flock -n -x 9 || exit 0; auto_restore_layout "$2" "$3" ) 9>"$runtime_root/restore.lock"
     ;;
   restore)
     (( $# == 1 )) || exit 2

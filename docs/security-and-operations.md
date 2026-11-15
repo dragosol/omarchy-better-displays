@@ -143,7 +143,9 @@ kept and updates nothing. Discovery and Refresh never write profile state.
   it; programs inside them (`hyprctl`, `edid-decode`, the brightness tool)
   have their own deadlines too. `BoundedProcess.qml` reports exactly one
   result per helper, also when the program never starts, so busy state always
-  clears. Waits for the shared restore lock are finite (30 seconds).
+  clears. Manual changes wait up to 30 seconds for the shared restore lock.
+  Automatic restore and reload recovery skip the attempt when that lock is
+  already held, so a second caller cannot queue another modeset behind the first.
 - The profile-name field is read-only to Qt and typed into by
   `TextEditing.js`, so it never reads the clipboard; paste is not offered.
 - A failed Keep leaves its transaction available rather than silently claiming
