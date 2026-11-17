@@ -24,6 +24,7 @@ run_layout() {
   HYPRCTL_LOG="$test_root/hyprctl.log" \
   HYPRCTL_MONITORS="$test_root/monitors.json" \
   MONITOR_SYSFS_ROOT="$test_root/empty-sysfs" \
+  OMARCHY_PATH="$test_root/omarchy-flat" \
   LAYOUT_WATCHDOG_DISABLED=1 \
     bash "$script" "$@"
 }
