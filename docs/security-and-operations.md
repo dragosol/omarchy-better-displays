@@ -63,7 +63,12 @@ confirmed Keep.
 - Scale must be within `0.5..4`.
 - Display transforms must be integers within Hyprland's supported `0..7` range.
 - Workspace keys are limited to `1..10` and values use the monitor-identifier
-  allowlist.
+  allowlist. Workspace rules are written with `persistent = false`. When
+  Omarchy's per-monitor workspaces are present
+  (`$OMARCHY_PATH/default/hypr/monitor-workspaces.lua`), none are written or
+  applied, and the persistent rules an earlier version wrote are released with
+  one `hyprctl eval` built only from lines in the plugin's own remembered-rules
+  file that match the exact generated shape.
 - Transaction identifiers use the same conservative identifier allowlist.
 
 The script builds Lua only after validation and sends it as one argument to

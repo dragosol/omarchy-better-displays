@@ -26,6 +26,7 @@ run_layout() {
   HYPRCTL_LOG="$test_root/hyprctl.log" \
   HYPRCTL_MONITORS="$test_root/monitors.json" \
   MONITOR_SYSFS_ROOT="$test_root/empty-sysfs" \
+  OMARCHY_PATH=${OMARCHY_PATH_TEST:-$test_root/omarchy-flat} \
   LAYOUT_WATCHDOG_DISABLED=${LAYOUT_WATCHDOG_DISABLED:-1} \
   LAYOUT_SETTLE_ATTEMPTS=4 \
     bash "$script" "$@"
@@ -95,7 +96,7 @@ jq -e --argjson monitors "$proposed" --argjson workspaces "$workspaces" '
 ' "$state_file" >/dev/null
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
 ! grep -Fx 'reload' "$test_root/hyprctl.log"
-grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = true }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = true }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = true })' "$test_root/hyprctl.log"
+grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = false }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = false }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = false })' "$test_root/hyprctl.log"
 test ! -d "$test_root/runtime/omarchy-displays/keep-test"
 
 # Restore is a no-op for monitor state when the saved v2 profile already
@@ -104,7 +105,7 @@ test ! -d "$test_root/runtime/omarchy-displays/keep-test"
 run_layout restore
 restore_eval_count=$(grep -c '^eval hl.monitor' "$test_root/hyprctl.log" || true)
 test "$restore_eval_count" -eq 0
-grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = true }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = true }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = true })' "$test_root/hyprctl.log"
+grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = false }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = false }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = false })' "$test_root/hyprctl.log"
 
 # A claimed Revert/Keep transaction is still active. Screen recreation during
 # its modeset must not let a replacement panel restore the old saved profile.
@@ -165,7 +166,7 @@ test ! -d "$test_root/runtime/omarchy-displays/timeout-test"
 # Workspace-only saves keep the current monitor payload and reload immediately.
 run_layout save-workspaces "$previous" '{"3":"eDP-1","8":"DP-1"}'
 jq -e '.profiles[0].topology.workspaces == {"3":"eDP-1","8":"DP-1"}' "$state_file" >/dev/null
-grep -F 'eval hl.workspace_rule({ workspace = "3", monitor = "eDP-1", default = true, persistent = true }); hl.workspace_rule({ workspace = "8", monitor = "DP-1", default = true, persistent = true })' "$test_root/hyprctl.log"
+grep -F 'eval hl.workspace_rule({ workspace = "3", monitor = "eDP-1", default = true, persistent = false }); hl.workspace_rule({ workspace = "8", monitor = "DP-1", default = true, persistent = false })' "$test_root/hyprctl.log"
 
 if run_layout preview invalid-test \
   '[{"name":"bad;command","x":0,"y":0,"width":1,"height":1,"refreshRate":60,"scale":1}]' \

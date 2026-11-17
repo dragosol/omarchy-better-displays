@@ -155,11 +155,15 @@ apply_payload() {
   done
 }
 
+# Workspace rules only say where a workspace opens. They are never persistent:
+# a persistent rule keeps an empty workspace alive forever, stuck on the bar,
+# and the explicit false also clears one an older version left at runtime.
 apply_workspace_payload() {
   local workspaces="$1"
   local lua_code=""
   local statement workspace monitor is_default
   declare -A default_written=()
+  omarchy_per_monitor_workspaces && return 0
 
   while IFS=$'\t' read -r workspace monitor; do
     [[ -n $workspace && -n $monitor ]] || continue
@@ -168,7 +172,7 @@ apply_workspace_payload() {
       is_default=true
       default_written[$monitor]=1
     fi
-    statement="hl.workspace_rule({ workspace = \"$workspace\", monitor = \"$monitor\", default = $is_default, persistent = true })"
+    statement="hl.workspace_rule({ workspace = \"$workspace\", monitor = \"$monitor\", default = $is_default, persistent = false })"
     [[ -z $lua_code ]] || lua_code+="; "
     lua_code+="$statement"
   done < <(jq -r 'to_entries | sort_by(.key | tonumber) | .[] | [.key, .value] | @tsv' <<<"$workspaces")
@@ -521,10 +525,23 @@ sync_omarchy_scale_knob() {
     "$monitor_lua"
 }
 
+# Versions before 1.1.4 wrote persistent workspace rules, and those stay in the
+# running Hyprland after the file stops naming them. With per-monitor
+# workspaces they pin empty workspaces to the bar, so the ones this plugin
+# wrote (read back from its own file, never the user's rules) are released.
+release_remembered_workspaces() {
+  local file="$1" lua_code=""
+  [[ -f $file ]] || return 0
+  lua_code=$(grep -E '^hl\.workspace_rule\(\{ workspace = "([1-9]|10)", monitor = "[A-Za-z0-9 ._()+:-]+", default = (true|false), persistent = true \}\)$' "$file" \
+    | sed 's/persistent = true })$/persistent = false })/' | paste -sd ';' -) || return 0
+  [[ -z $lua_code ]] || timeout -k 1 5 hyprctl eval "$lua_code" >/dev/null 2>&1 || true
+}
+
 sync_hyprland_rules() {
   local payload="$1" workspaces="${2:-}" live file dir stage lines modeline name width height refresh
   [[ ${DISPLAYS_HYPRLAND_RULES:-1} == 1 ]] || return 0
   [[ -n $workspaces ]] || workspaces='{}'
+  omarchy_per_monitor_workspaces && workspaces='{}'
   validate_payload "$payload" && validate_workspace_payload "$workspaces" || return 0
   live=$(hyprctl monitors all -j 2>/dev/null) || live='[]'
 
@@ -600,7 +617,7 @@ sync_hyprland_rules() {
       + ["end)"] end)
     + ($workspaces | to_entries | sort_by(.key | tonumber)
         | reduce .[] as $e ({seen: {}, out: []};
-            .out += ["hl.workspace_rule({ workspace = \"\($e.key)\", monitor = \"\(ident($e.value))\", default = \(if .seen[$e.value] then "false" else "true" end), persistent = true })"]
+            .out += ["hl.workspace_rule({ workspace = \"\($e.key)\", monitor = \"\(ident($e.value))\", default = \(if .seen[$e.value] then "false" else "true" end), persistent = false })"]
             | .seen[$e.value] = true)
         | .out)
     | .[]' <<<"$payload") || return 0
@@ -609,6 +626,7 @@ sync_hyprland_rules() {
 
   file=$(hyprland_rules_file)
   dir=${file%/*}
+  omarchy_per_monitor_workspaces && release_remembered_workspaces "$file"
   mkdir -p "$dir" || return 0
   stage=$(mktemp "$dir/.displays-remembered.XXXXXX") || return 0
   {

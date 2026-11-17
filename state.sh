@@ -92,8 +92,11 @@ printf '%s\n' "$monitors_json" | jq -c --argjson preferred "$preferred_resolutio
   }]
 '
 
-timeout -k 1 5 hyprctl workspaces -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
-timeout -k 1 5 hyprctl workspacerules -j 2>/dev/null | jq -c '.' || printf '%s\n' '[]'
+# One line each, whatever hyprctl answers: the panel reads lines by position.
+for query in workspaces workspacerules; do
+  line=$(timeout -k 1 5 hyprctl "$query" -j 2>/dev/null | jq -c '.' 2>/dev/null | head -n 1)
+  printf '%s\n' "${line:-[]}"
+done
 timeout -k 1 10 bash "$script_dir/apply-layout.sh" pending 2>/dev/null || printf '%s\n' '{}'
 snapshot=$(monitor_snapshot "$monitors_json" 2>/dev/null) || snapshot='{}'
 printf '%s\n' "$snapshot"
@@ -108,3 +111,6 @@ if profile_store_load && status=$(profile_store_status "$(<"$(profile_store_file
 else
   printf '%s\n' '{"activeProfileId":"","activeAnchor":"","activeVariants":{},"profiles":[],"match":{"status":"new","profileId":"","matches":[]}}'
 fi
+# Whether Omarchy keeps per-monitor workspaces itself; the panel then hides
+# its own workspace assignments.
+if omarchy_per_monitor_workspaces; then printf '%s\n' per-monitor; else printf '%s\n' flat; fi

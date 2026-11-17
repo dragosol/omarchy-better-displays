@@ -13,6 +13,15 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/edid-modes-lib.sh"
 
+# Omarchy 4.5 gives every monitor its own block of ten workspaces (the laptop
+# panel 1-10, the next monitor 11-20, ...) and keeps them where they belong
+# itself. The plugin's flat 1-10 workspace assignments would fight that, so
+# with per-monitor workspaces it makes no workspace rules at all.
+omarchy_per_monitor_workspaces() {
+  local root=${OMARCHY_PATH:-$HOME/.local/share/omarchy}
+  [[ -f $root/default/hypr/monitor-workspaces.lua ]]
+}
+
 connector_metadata_json() {
   local sysfs_root=${MONITOR_SYSFS_ROOT:-/sys/class/drm}
   local path base name card instance status edid_hash driver transport

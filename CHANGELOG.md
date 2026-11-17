@@ -2,6 +2,18 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.4] - 2026-11-16
+
+### Fixed
+
+- Empty workspaces no longer get stuck on the bar. Workspace rules were always
+  written as persistent, so Hyprland kept every assigned workspace alive even
+  when empty. They now only say where a workspace opens.
+- On Omarchy 4.5 and later, which gives every monitor its own block of
+  workspaces, the plugin no longer assigns workspaces as one flat 1–10 range.
+  The workspace row is hidden, no workspace rules are written or applied, and
+  the persistent rules an earlier version left behind are released.
+
 ## [1.1.3] - 2026-11-13
 
 ### Fixed

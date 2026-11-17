@@ -42,6 +42,9 @@ Panel {
   property var workspaceAssignmentsActual: ({})
   property var stagedWorkspaceAssignments: ({})
   property bool workspaceAssignmentsManaged: false
+  // Omarchy 4.5+ gives every monitor its own workspaces and keeps them in
+  // place itself; the flat 1-10 assignments are hidden and never sent then.
+  property bool perMonitorWorkspaces: false
   readonly property bool workspaceDirty: !Model.workspaceAssignmentsEqual(
     workspaceAssignmentsActual, stagedWorkspaceAssignments)
   readonly property bool layoutDirty: arrangementDirty || settingsDirty || workspaceDirty || anchorDirty
@@ -314,7 +317,7 @@ Panel {
     list.push("textsize")
     if (layoutPreview.length > 0) list.push("arrangement")
     if (selectedDisplay) {
-      list.push("workspaces")
+      if (!perMonitorWorkspaces) list.push("workspaces")
       if (resolutionOptions.length > 0) list.push("resolution")
       if (refreshRateOptions.length > 0) list.push("refreshRate")
       list.push("scale")
@@ -760,6 +763,12 @@ Panel {
     var rules = []
     try { workspaces = JSON.parse(String(workspacesJson || "[]")) } catch (e) {}
     try { rules = JSON.parse(String(rulesJson || "[]")) } catch (e) {}
+    if (root.perMonitorWorkspaces) {
+      root.workspaceAssignmentsActual = ({})
+      root.stagedWorkspaceAssignments = ({})
+      root.workspaceAssignmentsManaged = false
+      return
+    }
     var preserveStaged = root.workspaceDirty
     var hasMonitorRules = false
     for (var i = 0; i < rules.length; i++) {
@@ -786,13 +795,15 @@ Panel {
   }
 
   function toggleWorkspaceForSelected(workspace) {
-    if (!root.selectedDisplay || root.layoutApplying || root.layoutConfirmationPending) return
+    if (!root.selectedDisplay || root.perMonitorWorkspaces
+        || root.layoutApplying || root.layoutConfirmationPending) return
     root.stagedWorkspaceAssignments = Model.toggleWorkspaceAssignment(
       root.stagedWorkspaceAssignments, workspace, root.selectedDisplay.name)
     root.layoutError = ""
   }
 
   function workspacePayload() {
+    if (root.perMonitorWorkspaces) return ({})
     return root.workspaceAssignmentsManaged || root.workspaceDirty
       ? root.stagedWorkspaceAssignments : ({})
   }
@@ -1391,8 +1402,11 @@ Panel {
         // A refresh cut short by its deadline or output cap is ignored rather
         // than read as "no displays": every line, the last one included, must
         // have arrived whole.
-        if (lines.length < 13) return
+        if (lines.length < 14) return
         try { JSON.parse(String(lines[12] || "")) } catch (e) { return }
+        var workspaceMode = String(lines[13] || "").trim()
+        if (workspaceMode !== "per-monitor" && workspaceMode !== "flat") return
+        root.perMonitorWorkspaces = workspaceMode === "per-monitor"
         var brightness = String(lines[0] || "").trim()
         root.brightnessAvailable = brightness !== "unavailable" && brightness !== ""
         root.brightnessPercent = root.brightnessAvailable ? Math.max(0, Math.min(100, parseInt(brightness, 10))) : 0
@@ -2240,7 +2254,7 @@ Panel {
                 tileIndex: index
                 foreground: root.bar.foreground
                 fontFamily: root.bar.fontFamily
-                workspaceNumbers: root.workspacesForMonitor(modelData.name)
+                workspaceNumbers: root.perMonitorWorkspaces ? [] : root.workspacesForMonitor(modelData.name)
                 selected: modelData.name === root.selectedMonitorName
                 hasCursor: root.cursorActive && root.focusSection === "arrangement" && root.selectedIndex === index
                 editing: root.arrangementEditing && root.focusSection === "arrangement" && root.selectedIndex === index
@@ -2366,7 +2380,7 @@ Panel {
             }
 
             Column {
-              visible: !!root.selectedDisplay
+              visible: !!root.selectedDisplay && !root.perMonitorWorkspaces
               width: parent.width
               spacing: Style.space(6)
 

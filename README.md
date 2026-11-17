@@ -50,7 +50,7 @@ omarchy plugin disable omarchy.monitor
 | Left: your displays | Centre: arrangement | Right: the selected display |
 | --- | --- | --- |
 | A card per display with an on/off switch; click a card to select it | Drag screens to match your desk; Apply previews, Keep saves and remembers | Native-mode insight with a one-click fix |
-| Layout presets: Extend, Mirror, Built-in only, External only | Workspace 1–10 assignment for the selected display | Resolution, refresh rate, scale (with a density-based suggestion) and rotation |
+| Layout presets: Extend, Mirror, Built-in only, External only | Workspace 1–10 assignment for the selected display (not shown on Omarchy 4.5 and later, which gives every monitor its own workspaces) | Resolution, refresh rate, scale (with a density-based suggestion) and rotation |
 | Brightness and text size | Profiles: rename, select, duplicate, delete; the anchor display | Health summary, sanitized report copy, safe repair |
 
 The header shows the overall state (displays on, extended or mirrored,
@@ -187,7 +187,10 @@ you keep a change. A few things are worth knowing:
   while a display the layout keeps on is connected (read from
   `/sys/class/drm/*/status`) and switches it back on when that display is
   unplugged, so a laptop never boots or undocks to a dark screen. Delete it to
-  fall back to `monitors.lua`.
+  fall back to `monitors.lua`. Workspace rules only say where a workspace
+  opens; they never keep an empty one alive. On Omarchy 4.5 and later, which
+  keeps every monitor's own workspaces in place itself, no workspace rules are
+  written at all.
 - **Emergency revert:** if a preview ever leaves you without a usable screen,
   run `omarchy shell omarchy.monitor revert`, or bind it yourself in your
   Hyprland configuration:
