@@ -2,6 +2,22 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.5] - 2026-11-17
+
+### Fixed
+
+- When Hyprland rejects a layout or a workspace rule, the error now says why.
+  `hyprctl eval` reports Lua errors on stdout, which was being thrown away, so
+  the reason always came back empty. Thanks to @kansoit (#6).
+- The release checks pass on a machine running Omarchy 4.5. One test still
+  picked up the host's own Omarchy install. Thanks to @kansoit (#10).
+
+### Documentation
+
+- The README and security notes now say exactly what the plugin writes: the
+  remembered-rules file, and in `monitors.lua` only Omarchy's two scale knobs,
+  never your monitor rules. Thanks to @kansoit (#7).
+
 ## [1.1.4] - 2026-11-16
 
 ### Fixed
