@@ -59,7 +59,7 @@ fi
 run_layout preview keep-test "$proposed" "$previous" "$workspaces" settings "" "" DP-1 5
 test "$(stat -c '%a' "$test_root/runtime/omarchy-displays")" = 700
 grep -F -- 'eval hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@59.95", position = "0x120", scale = 1, transform = 1, mirror = "" }); hl.monitor({ output = "eDP-1", disabled = false, mode = "2880x1800@60", position = "1080x0", scale = 2, transform = 0, mirror = "" })' "$test_root/hyprctl.log"
-! grep -F -- 'keyword monitor' "$test_root/hyprctl.log"
+! grep -F -- 'keyword monitor' "$test_root/hyprctl.log" || exit 1
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
 test -f "$test_root/runtime/omarchy-displays/keep-test/proposed.json"
 test -f "$test_root/runtime/omarchy-displays/keep-test/previous.json"
@@ -95,7 +95,7 @@ jq -e --argjson monitors "$proposed" --argjson workspaces "$workspaces" '
   (.profiles[0].connectedSet == ["DP-1", "eDP-1"])
 ' "$state_file" >/dev/null
 test ! -e "$test_root/config/hypr/monitor-layout.generated.lua"
-! grep -Fx 'reload' "$test_root/hyprctl.log"
+! grep -Fx 'reload' "$test_root/hyprctl.log" || exit 1
 grep -F 'eval hl.workspace_rule({ workspace = "1", monitor = "DP-1", default = true, persistent = false }); hl.workspace_rule({ workspace = "2", monitor = "DP-1", default = false, persistent = false }); hl.workspace_rule({ workspace = "4", monitor = "eDP-1", default = true, persistent = false })' "$test_root/hyprctl.log"
 test ! -d "$test_root/runtime/omarchy-displays/keep-test"
 
@@ -136,7 +136,7 @@ if run_layout restore; then
   echo "restore applied a profile for a different display set" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
 # A compositor drift during confirmation is repaired without a full reload.
@@ -147,7 +147,7 @@ run_layout preview drift-keep "$drift_proposed" "$previous" '{}'
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 : >"$test_root/hyprctl.log"
 HYPRCTL_FAIL_RELOAD=1 run_layout keep drift-keep
-! grep -Fx 'reload' "$test_root/hyprctl.log"
+! grep -Fx 'reload' "$test_root/hyprctl.log" || exit 1
 grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" >/dev/null
 test ! -d "$test_root/runtime/omarchy-displays/drift-keep"
 jq -e --argjson monitors "$drift_proposed" '.profiles[0].topology.monitors == $monitors' "$state_file" >/dev/null
@@ -238,7 +238,7 @@ run_layout preview duplicate-keep "$topology" "$previous" '{}' settings '' dupli
 duplicate_eval_count=$(grep -c '^eval hl.monitor' "$test_root/hyprctl.log")
 run_layout keep duplicate-keep
 test "$duplicate_eval_count" -eq "$(grep -c '^eval hl.monitor' "$test_root/hyprctl.log")"
-! grep -Fx 'reload' "$test_root/hyprctl.log"
+! grep -Fx 'reload' "$test_root/hyprctl.log" || exit 1
 jq -e '
   .profiles[0].topology.variants.duplicate.monitors[]
   | select(.name == "eDP-1") | .mirrorOf == "DP-1"
@@ -336,7 +336,7 @@ if run_layout preview missing-out \
   echo "missing output was accepted" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 
 # A mode the connector does not advertise fails before any eval.
 if run_layout preview bad-mode \
@@ -345,7 +345,7 @@ if run_layout preview bad-mode \
   echo "unavailable mode was accepted" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 
 # Runtime-only link/GPU limits become a structured, actionable rejection and
 # never leave a pending transaction behind.
@@ -409,7 +409,7 @@ if run_layout preview all-off \
   echo "topology with no active display was accepted" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 
 # A hardware-generation change during confirmation cancels the preview. The
 # recovery topology is derived from the fresh enumeration, excludes the lost
@@ -424,7 +424,7 @@ run_layout cancel-stale hotplug-cancel
 test ! -d "$test_root/runtime/omarchy-displays/hotplug-cancel"
 test "$state_before_cancel" = "$(sha256sum "$state_file" | awk '{print $1}')"
 jq -e 'any(.[]; .disabled != true)' "$test_root/monitors.json" >/dev/null
-! tail -n 1 "$test_root/hyprctl.log" | grep -F 'output = "DP-1"'
+! tail -n 1 "$test_root/hyprctl.log" | grep -F 'output = "DP-1"' || exit 1
 
 # Cancellation is generation-guarded: an unchanged connected set leaves the
 # recoverable transaction pending.
@@ -528,7 +528,7 @@ run_layout keep headless
 jq -e '.[] | select(.name == "SIDECAR-iPad-x1") | .x == -1366 and .y == 56' "$test_root/monitors.json" >/dev/null
 # A mode the output neither advertises nor runs is still refused.
 headless_bad=$(jq -c 'map(if .name == "SIDECAR-iPad-x1" then .width = 1024 | .height = 768 else . end)' <<<"$headless_left")
-! run_layout preview headless-bad "$headless_bad" "$headless_left" '{}' 2>/dev/null
+! run_layout preview headless-bad "$headless_bad" "$headless_left" '{}' 2>/dev/null || exit 1
 printf '%s' "$monitors_json" >"$test_root/monitors.json"
 
 # Ordinary outputs and mirrored ones are separate compositor transactions. When
@@ -548,9 +548,35 @@ jq -e '.[] | select(.name == "eDP-1") | .x == 1920 and .disabled == false' "$tes
 test ! -e "$test_root/runtime/omarchy-displays/half-mirror"
 test "$(run_layout pending)" = '{}'
 
+# When putting the previous layout back fails too, and so does the reload
+# fallback, the transaction stays pending for the watchdog, which retries the
+# revert until it holds.
+: >"$test_root/hyprctl.log"
+if HYPRCTL_FAIL_EVAL_MATCH='mirror = "DP-1"' HYPRCTL_FAIL_EVAL_MATCH2='position = "1920x0"' \
+    HYPRCTL_FAIL_RELOAD=1 run_layout preview stuck-mirror "$half" "$live" '{}' 2>/dev/null; then
+  echo "a rejected mirror transaction was accepted" >&2
+  exit 1
+fi
+grep -Fxq 'reload' "$test_root/hyprctl.log"
+test -f "$test_root/runtime/omarchy-displays/stuck-mirror/previous.json"
+run_layout pending | jq -e '.id == "stuck-mirror"' >/dev/null
+# The compositor still refuses: the watchdog keeps it pending and reloads.
+: >"$test_root/hyprctl.log"
+! HYPRCTL_FAIL_EVAL_MATCH='position = "1920x0"' WATCHDOG_ATTEMPTS=2 WATCHDOG_RETRY_SECONDS=0 \
+  run_layout watchdog stuck-mirror 0 || exit 1
+test "$(grep -c 'position = "1920x0"' "$test_root/hyprctl.log")" -ge 2
+grep -Fxq 'reload' "$test_root/hyprctl.log"
+test -f "$test_root/runtime/omarchy-displays/stuck-mirror/previous.json"
+# Once it accepts, the revert lands and the transaction is gone.
+WATCHDOG_RETRY_SECONDS=0 run_layout watchdog stuck-mirror 0
+jq -e '.[] | select(.name == "DP-1") | .transform == 0 and .x == 0' "$test_root/monitors.json" >/dev/null
+jq -e '.[] | select(.name == "eDP-1") | .x == 1920' "$test_root/monitors.json" >/dev/null
+test ! -e "$test_root/runtime/omarchy-displays/stuck-mirror"
+printf '%s' "$monitors_json" >"$test_root/monitors.json"
+
 # A failure before anything was applied issues no extra modeset.
 : >"$test_root/hyprctl.log"
-! HYPRCTL_FAIL_EVAL=1 run_layout preview nothing-applied "$proposed" "$live" '{}' 2>/dev/null
+! HYPRCTL_FAIL_EVAL=1 run_layout preview nothing-applied "$proposed" "$live" '{}' 2>/dev/null || exit 1
 test "$(grep -c '^eval' "$test_root/hyprctl.log")" = 1
 
 # The rollback watchdog is started before the preview applies anything, so a

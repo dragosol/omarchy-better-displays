@@ -28,7 +28,7 @@ set -e
 test "$status" = 124
 test $(( $(date +%s) - start )) -le 4
 sleep 0.3
-! alive a && ! alive b
+! alive a && ! alive b || exit 1
 
 # Stopping the runner early ends the helper's group too.
 bash "$runner" 60 100 100 bash -c "exec -a $tag-c sleep 62 & exec -a $tag-d sleep 63" &
@@ -38,7 +38,17 @@ kill -TERM "$runner_pid"
 set +e; wait "$runner_pid"; status=$?; set -e
 test "$status" = 143
 sleep 0.3
-! alive c && ! alive d
+! alive c && ! alive d || exit 1
+
+# A runner killed outright never runs its trap; the helper's group still ends.
+bash "$runner" 60 100 100 bash -c "exec -a $tag-f sleep 65 & exec -a $tag-g sleep 66" &
+runner_pid=$!
+sleep 0.5
+alive f && alive g
+kill -KILL "$runner_pid"
+wait "$runner_pid" 2>/dev/null || true
+for _ in 1 2 3 4 5 6 7 8 9 10; do alive f || alive g || break; sleep 0.2; done
+! alive f && ! alive g || exit 1
 
 # A daemon holding the helper's stdout does not keep the runner alive.
 start=$(date +%s)
@@ -48,8 +58,8 @@ test $(( $(date +%s) - start )) -le 5
 pkill -f "$tag-e" || true
 
 # Malformed limits are refused before anything runs.
-! bash "$runner" 0 100 100 true
-! bash "$runner" 5 x 100 true
-! bash "$runner" 5 100 100
+! bash "$runner" 0 100 100 true || exit 1
+! bash "$runner" 5 x 100 true || exit 1
+! bash "$runner" 5 100 100 || exit 1
 
 echo "bounded runner tests passed"

@@ -27,7 +27,7 @@ test -f "$rules"
 grep -Fq 'hl.monitor({ output = "desc:LG Display 0x0778", disabled = false, mode = "2880x1800@59.99", position = "0x0", scale = 2, transform = 0 })' "$rules"
 # The unsafe description falls back to the validated connector name.
 grep -Fq 'hl.monitor({ output = "DP-1", disabled = false, mode = "1920x1080@60", position = "1440x0", scale = 1, transform = 0 })' "$rules"
-! grep -q 'os.execute\|pwned\|Evil' "$rules"
+! grep -q 'os.execute\|pwned\|Evil' "$rules" || exit 1
 grep -Fq 'hl.workspace_rule({ workspace = "4", monitor = "DP-1", default = true, persistent = false })' "$rules"
 grep -Fq 'hl.workspace_rule({ workspace = "5", monitor = "DP-1", default = false, persistent = false })' "$rules"
 # Every generated statement is one of the two allowed shapes.
@@ -71,7 +71,7 @@ grep -Fq 'hl.monitor({ output = "HDMI-A-1", disabled = false, mode = "1920x1080@
 grep -Fq 'hl.monitor({ output = "DP-3", disabled = false, mode = "1920x1080@60", position = "0x0"' "$rules"
 grep -Fq 'hl.monitor({ output = "desc:Dell Inc. DELL U2720Q 1234ABC", disabled = false' "$rules"
 grep -Fq 'hl.workspace_rule({ workspace = "1", monitor = "DP-3", default = true, persistent = false })' "$rules"
-! grep -q 'desc:LG Electronics' "$rules"
+! grep -q 'desc:LG Electronics' "$rules" || exit 1
 
 # The built-in panel kept off with only an external on (#3). Hyprland loads
 # the rules plugged in or not, so the panel may only be switched off while the
@@ -86,7 +86,7 @@ bash "$script" keep lidopen
 grep -Fq 'local kept_on = { "DP-1" }' "$rules"
 grep -Fxq '  hl.monitor({ output = "desc:LG Display 0x07C6", disabled = true })' "$rules"
 # Never an unconditional disable.
-! grep -q '^hl.monitor({ .*disabled = true' "$rules"
+! grep -q '^hl.monitor({ .*disabled = true' "$rules" || exit 1
 
 if command -v lua >/dev/null; then
   drm="$root/drm"
@@ -119,7 +119,7 @@ LUA
   test -z "$(run_rules eDP-1)"
   # Booting or reloading without the external: the panel is never switched off.
   echo disconnected >"$drm/card1-DP-1/status"
-  ! run_rules | grep -q 'desc:LG Display 0x07C6 off'
+  ! run_rules | grep -q 'desc:LG Display 0x07C6 off' || exit 1
   # Unplugged at runtime: the panel is switched back on.
   test "$(run_rules DP-1)" = 'desc:LG Display 0x07C6 on'
 else
@@ -145,10 +145,10 @@ solo='[{"name":"eDP-1","width":1920,"height":1200,"refreshRate":60,"x":0,"y":0,"
 OMARCHY_PATH="$root/omarchy-pm" bash "$script" preview pm "$solo" "$solo" '{"1":"eDP-1","2":"eDP-1"}'
 OMARCHY_PATH="$root/omarchy-pm" bash "$script" keep pm
 grep -Fxq 'eval hl.workspace_rule({ workspace = "1", monitor = "desc:BOE 0x0BCA", default = true, persistent = false });hl.workspace_rule({ workspace = "2", monitor = "desc:BOE 0x0BCA", default = false, persistent = false })' "$HYPRCTL_LOG"
-! grep -F 'workspace_rule' "$HYPRCTL_LOG" | grep -Fq 'persistent = true'
-! grep -Fq 'name:mine' "$HYPRCTL_LOG"
-! grep -Fq 'workspace = "1", monitor = "eDP-1"' "$HYPRCTL_LOG"
-! grep -Fq 'workspace_rule' "$rules"
+! grep -F 'workspace_rule' "$HYPRCTL_LOG" | grep -Fq 'persistent = true' || exit 1
+! grep -Fq 'name:mine' "$HYPRCTL_LOG" || exit 1
+! grep -Fq 'workspace = "1", monitor = "eDP-1"' "$HYPRCTL_LOG" || exit 1
+! grep -Fq 'workspace_rule' "$rules" || exit 1
 grep -Fq 'hl.monitor({ output = "desc:BOE 0x0BCA"' "$rules"
 
 cp "$rules" "${DUMP_RULES:-/dev/null}"

@@ -8,7 +8,7 @@
 # `timeout` leads its own process group and signals that whole group when the
 # deadline passes, so programs the helper started (hyprctl, jq, edid-decode,
 # ddcutil) end with it. When the shell stops this runner early, the same
-# group is ended here. stdout and stderr each pass through `head -c`; a helper
+# group is ended here, or by timeout itself when the runner is killed outright. stdout and stderr each pass through `head -c`; a helper
 # that writes past its cap gets SIGPIPE. The exit status is the helper's, or
 # 124 when the deadline passed.
 
@@ -34,7 +34,13 @@ out_pid=$!
 exec 5> >(exec stdbuf -o0 head -c "$err_bytes" >&2)
 err_pid=$!
 
-timeout -k 2 "$seconds" "$@" >&4 2>&5 &
+# A runner killed outright (SIGKILL, as when the shell tears a panel down
+# hard) never runs the trap above. The kernel then sends timeout SIGTERM
+# instead (its parent-death signal), and timeout passes it on to the
+# helper's whole group.
+pdeath=()
+command -v setpriv >/dev/null 2>&1 && pdeath=(setpriv --pdeathsig TERM --)
+"${pdeath[@]}" timeout -k 2 "$seconds" "$@" >&4 2>&5 &
 child=$!
 exec 4>&- 5>&-
 wait "$child"

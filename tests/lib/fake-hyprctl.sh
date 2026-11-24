@@ -30,7 +30,8 @@ if [[ $1 == eval ]]; then
     exit 1
   fi
   # Fail only the transaction that contains this text (e.g. 'mirror = "eDP-1"').
-  if [[ -n ${HYPRCTL_FAIL_EVAL_MATCH:-} && $2 == *"$HYPRCTL_FAIL_EVAL_MATCH"* ]]; then
+  if [[ -n ${HYPRCTL_FAIL_EVAL_MATCH:-} && $2 == *"$HYPRCTL_FAIL_EVAL_MATCH"* ]] \
+      || [[ -n ${HYPRCTL_FAIL_EVAL_MATCH2:-} && $2 == *"$HYPRCTL_FAIL_EVAL_MATCH2"* ]]; then
     echo "rejected" >&2
     exit 1
   fi

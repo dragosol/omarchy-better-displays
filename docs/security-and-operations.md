@@ -94,7 +94,9 @@ labels out of those tooltips and uses trusted static workspace guidance there.
    transaction, and changes only the live monitor layout.
 2. A detached watchdog, started before anything is applied and with its own
    deadline, waits the 15-second confirmation plus 5 seconds. It reverts only
-   a transaction that is still pending.
+   a transaction that is still pending. A revert the compositor refuses is
+   retried (four attempts, five seconds apart), with a config reload as the
+   last resort.
 3. **Keep** claims the transaction, atomically saves the confirmed topology
    into the versioned profile store (schema v2), repairs any compositor drift
    through the runtime monitor transaction, reapplies workspace state, and
@@ -146,9 +148,14 @@ kept and updates nothing. Discovery and Refresh never write profile state.
 - A failed preview remains uncommitted and reports an error in the panel. If
   part of it was already applied (ordinary outputs and mirrored ones are
   separate compositor transactions), the previous layout is put back first.
+  If that fails too, the transaction stays pending until the watchdog's
+  retries put it back.
 - Every helper the panel starts runs through `bounded.sh` with an overall
   deadline, capped stdout and stderr, and its whole process group ended with
-  it; programs inside them (`hyprctl`, `edid-decode`, the brightness tool)
+  it. That holds when the runner is killed outright too (Quickshell kills a
+  destroyed panel's processes with SIGKILL): `setpriv --pdeathsig` gives
+  `timeout` a SIGTERM when the runner dies, which it passes to the group.
+  Programs inside them (`hyprctl`, `edid-decode`, the brightness tool)
   have their own deadlines too. `BoundedProcess.qml` reports exactly one
   result per helper, also when the program never starts, so busy state always
   clears. Waits for the shared restore lock are finite (30 seconds).

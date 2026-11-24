@@ -129,7 +129,7 @@ if run_layout restore 2>"$test_root/swapped.err"; then
   echo "profile restored after monitor identity changed on the same connector" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 
 # A strongly identified monitor on another connector is surfaced as a moved
 # profile candidate for confirmation, but restore remains observation-only.
@@ -144,7 +144,7 @@ if run_layout restore 2>"$test_root/moved.err"; then
   echo "moved profile restored without confirmation" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 
 # A confirmed moved layout requires an explicit choice. Fork preserves the
 # source profile; update deliberately retargets only the selected profile.
@@ -182,7 +182,7 @@ if PATH="$test_root/bin:$PATH" XDG_CONFIG_HOME="$test_root/config" \
   echo "mismatched v1 state was applied" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 grep -F 'does not match' "$test_root/mismatch.err"
 test -f "$mismatch_root/state/omarchy/displays/layout.json"
 test ! -e "$mismatch_root/state/omarchy/displays/profiles.json"
@@ -200,7 +200,7 @@ if PATH="$test_root/bin:$PATH" XDG_CONFIG_HOME="$test_root/config" \
   echo "malformed v1 state was accepted" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 test -f "$malformed_root/state/omarchy/displays/layout.json"
 
 # --- Malformed v2 store: no eval, recoverable, backup untouched. ---
@@ -217,7 +217,7 @@ if PATH="$test_root/bin:$PATH" XDG_CONFIG_HOME="$test_root/config" \
   echo "malformed v2 store was accepted" >&2
   exit 1
 fi
-! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log"
+! grep -F -- 'eval hl.monitor' "$test_root/hyprctl.log" || exit 1
 test -f "$malformed_v2_root/state/omarchy/displays/layout.json"
 
 echo "profile store tests passed"

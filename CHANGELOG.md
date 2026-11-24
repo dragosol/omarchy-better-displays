@@ -2,6 +2,21 @@
 
 All notable user-visible changes to Better Displays Pro will be documented here.
 
+## [1.1.6] - 2026-11-23
+
+### Fixed
+
+- A preview that failed part-way could be left half-applied if putting the
+  previous layout back failed as well. Its recovery record was removed anyway,
+  so nothing tried again. It is now kept until the previous layout is really
+  back, and the rollback watchdog retries the revert, with a config reload as
+  the last resort.
+- Closing the shell or a bar while a helper was running could leave that
+  helper going until its own deadline. Its programs now end with it.
+- Several test checks that were meant to fail on a match never could, because
+  of how the shell treats negated commands. They now fail properly, and all of
+  them pass.
+
 ## [1.1.5] - 2026-11-17
 
 ### Fixed

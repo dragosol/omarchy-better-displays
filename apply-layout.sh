@@ -961,6 +961,22 @@ claim_transaction() {
   mkdir "$1/claim" 2>/dev/null
 }
 
+# A preview that failed after part of it went live: put the previous layout
+# back, with a config reload as the fallback. The transaction is forgotten
+# only once the previous layout is really live again. Otherwise it stays
+# pending, so the watchdog (already running) retries the revert.
+restore_failed_preview() {
+  local transaction_dir="$1" previous="$2" force="${3:-}" live
+  live=$(monitor_snapshot 2>/dev/null) || live='{"topology":[]}'
+  if [[ -n $force ]] || ! topology_matches_snapshot "$previous" "$live"; then
+    apply_payload_settled "$previous" >/dev/null 2>&1 \
+      || hyprctl reload >/dev/null 2>&1 || true
+    live=$(monitor_snapshot 2>/dev/null) || live='{"topology":[]}'
+  fi
+  topology_matches_snapshot "$previous" "$live" && cleanup_transaction "$transaction_dir"
+  return 0
+}
+
 preview_layout() {
   local transaction_id="$1"
   local proposed="$2"
@@ -1034,21 +1050,15 @@ preview_layout() {
     # Ordinary outputs and mirrored ones are separate compositor transactions,
     # so the first may already be live when a later one fails. Put the
     # previous layout back before forgetting the transaction.
-    if ! topology_matches_snapshot "$previous" "$(monitor_snapshot 2>/dev/null || echo '{"topology":[]}')"; then
-      apply_payload_settled "$previous" >/dev/null 2>&1 \
-        || hyprctl reload >/dev/null 2>&1 || true
-    fi
-    cleanup_transaction "$transaction_dir"
     trap - RETURN
+    restore_failed_preview "$transaction_dir" "$previous"
     return 1
   fi
   local applied_snapshot
   if ! applied_snapshot=$(wait_for_mirror_topology "$proposed"); then
     echo "Compositor did not resolve the requested mirror topology; preview reverted" >&2
-    apply_payload_settled "$previous" >/dev/null 2>&1 \
-      || hyprctl reload >/dev/null 2>&1 || true
-    cleanup_transaction "$transaction_dir"
     trap - RETURN
+    restore_failed_preview "$transaction_dir" "$previous" force
     return 8
   fi
   trap - RETURN
@@ -1231,7 +1241,16 @@ case "$command" in
     validate_id "$transaction_id" || exit 2
     [[ $3 =~ ^[0-9]+$ ]] || exit 2
     sleep "$3"
-    revert_layout "$transaction_id"
+    # A revert the compositor refuses is retried a few times; a transaction
+    # kept, reverted or cleaned up in the meantime ends the loop. The last
+    # resort is a config reload, which puts the remembered layout back.
+    for (( attempt = 1; attempt <= ${WATCHDOG_ATTEMPTS:-4}; attempt++ )); do
+      revert_layout "$transaction_id" && exit 0
+      sleep "${WATCHDOG_RETRY_SECONDS:-5}"
+    done
+    transaction_is_pending "$runtime_root/$transaction_id" \
+      && hyprctl reload >/dev/null 2>&1
+    exit 1
     ;;
   restore-undo)
     (( $# == 2 )) && [[ $2 =~ ^auto-[0-9]+$ ]] || exit 2
